@@ -1,0 +1,544 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Myanmar POS Pro</title>
+    
+    <link rel="manifest" href="manifest.json">
+    <meta name="theme-color" content="#ffffff">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <link rel="apple-touch-icon" href="icon.png">
+
+    <script src="https://unpkg.com/html5-qrcode" type="text/javascript"></script>
+    <style>
+        /* --- BASE STYLES --- */
+        body { font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; margin: 0; padding: 0; background-color: #f4f6f8; height: 100vh; display: flex; flex-direction: column; overscroll-behavior: none; user-select: none; -webkit-user-select: none; }
+        * { -webkit-tap-highlight-color: transparent; box-sizing: border-box; }
+
+        /* --- NAVBAR --- */
+        .navbar { background-color: white; flex-shrink: 0; display: flex; z-index: 1000; box-shadow: 0 -2px 15px rgba(0,0,0,0.05); border-top: 1px solid #eee; padding-bottom: env(safe-area-inset-bottom); }
+        .navbar button { flex: 1; padding: 12px 0; border: none; background: transparent; color: #95a5a6; font-size: 11px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; transition: all 0.2s; }
+        .navbar button.active { color: #009688; }
+        .nav-icon { font-size: 22px; margin-bottom: 2px; }
+
+        /* --- SCREENS --- */
+        .screen { display: none; flex-direction: column; height: 100%; overflow: hidden; position: relative; }
+        .active-screen { display: flex; }
+
+        /* --- DASHBOARD STYLES --- */
+        .dash-container { padding: 15px; overflow-y: auto; background: #f4f6f8; padding-bottom: 80px; }
+        .dash-card { background: linear-gradient(135deg, #00b894, #00cec9); color: white; padding: 20px; border-radius: 16px; margin-bottom: 15px; box-shadow: 0 8px 20px rgba(0,184,148,0.2); }
+        .dash-card.blue { background: linear-gradient(135deg, #0984e3, #74b9ff); box-shadow: 0 8px 20px rgba(9,132,227,0.2); }
+        .dash-title { font-size: 13px; opacity: 0.9; text-transform: uppercase; letter-spacing: 1px; font-weight: 600; }
+        .dash-value { font-size: 36px; font-weight: 800; margin-top: 5px; }
+        .best-seller-box { background: white; padding: 20px; border-radius: 16px; margin-top: 10px; box-shadow: 0 4px 15px rgba(0,0,0,0.03); border: 1px solid #eee; }
+
+        /* --- POS SCREEN --- */
+        .category-bar { display: flex; gap: 10px; padding: 15px; background: white; overflow-x: auto; white-space: nowrap; border-bottom: 1px solid #f0f0f0; flex-shrink: 0; }
+        .cat-chip { padding: 8px 18px; background: #f8f9fa; border-radius: 25px; font-size: 14px; color: #636e72; border: 1px solid #eee; font-weight: 600; transition: all 0.2s; }
+        .cat-chip.active { background: #009688; color: white; border-color: #009688; box-shadow: 0 4px 10px rgba(0,150,136,0.3); }
+
+        .product-area { flex: 1; overflow-y: auto; padding: 15px; background: #f4f6f8; padding-bottom: 80px; }
+        .product-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; padding-bottom: 50px; }
+        .product-btn { background: white; border: none; padding: 12px; text-align: center; border-radius: 16px; box-shadow: 0 2px 10px rgba(0,0,0,0.03); display: flex; flex-direction: column; justify-content: center; min-height: 110px; position: relative; transition: transform 0.1s; border: 1px solid #f0f0f0; }
+        .product-btn:active { transform: scale(0.96); background-color: #fafafa; }
+        .product-name { display: block; margin-bottom: 6px; color: #2d3436; font-weight: 600; font-size: 13px; line-height: 1.3; height: 34px; overflow: hidden; }
+        .product-price { color: #009688; font-weight: 800; font-size: 15px; }
+        .stock-badge { font-size: 10px; color: #b2bec3; margin-top: 6px; background: #f4f6f8; padding: 3px 8px; border-radius: 6px; display: inline-block; font-weight: 600; }
+        .out-of-stock { opacity: 0.6; filter: grayscale(1); pointer-events: none; }
+        .out-of-stock .stock-badge { color: #e17055; background: #ffeaa7; }
+
+        /* Cart Section */
+        .cart-section { background: white; border-top-left-radius: 24px; border-top-right-radius: 24px; display: flex; flex-direction: column; height: 50%; box-shadow: 0 -10px 40px rgba(0,0,0,0.08); position: relative; z-index: 50; overflow: hidden; }
+        .cart-header { padding: 20px; background: white; border-bottom: 1px solid #f5f5f5; display: flex; justify-content: space-between; align-items: center; }
+        .cart-title { font-weight: 800; font-size: 20px; color: #2d3436; letter-spacing: -0.5px; }
+        .cart-actions { display: flex; align-items: center; gap: 12px; }
+        .icon-btn { background: #e0f2f1; border: none; font-size: 18px; color: #009688; cursor: pointer; padding: 10px; border-radius: 12px; width: 42px; height: 42px; display: flex; align-items: center; justify-content: center; transition: background 0.2s; }
+        .icon-btn:active { background: #b2dfdb; }
+        .clear-btn { color: #ff7675; font-size: 13px; font-weight: 700; cursor: pointer; padding: 8px 12px; background: #fff5f5; border-radius: 8px; }
+        
+        .cart-list { flex: 1; overflow-y: auto; padding: 10px 20px; }
+        .cart-item { display: flex; justify-content: space-between; padding: 15px 0; border-bottom: 1px solid #f9f9f9; align-items: center; }
+        .cart-item-name { font-weight: 700; color: #2d3436; font-size: 15px; }
+        .cart-qty-badge { background: #2d3436; color: white; padding: 3px 8px; border-radius: 8px; font-size: 12px; margin-right: 8px; font-weight: 600; }
+        .cart-item-price { color: #009688; font-weight: 700; margin-right: 15px; font-size: 15px; }
+        .cart-item-remove { color: #dfe6e9; font-size: 20px; padding: 10px; cursor: pointer; transition: color 0.2s; }
+        .cart-item-remove:hover { color: #ff7675; }
+        
+        .cart-footer { padding: 20px; background: white; box-shadow: 0 -5px 20px rgba(0,0,0,0.03); padding-bottom: calc(20px + env(safe-area-inset-bottom)); }
+        .total-row { display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; }
+        .total-label { font-size: 16px; color: #636e72; font-weight: 600; }
+        .total-amount { font-weight: 900; font-size: 26px; color: #2d3436; }
+        
+        /* Checkout UI */
+        .checkout-actions { display: flex; gap: 12px; height: 54px; }
+        #cash-received { flex: 1; height: 100%; text-align: center; font-size: 18px; font-weight: 700; border: 2px solid #dfe6e9; border-radius: 14px; padding: 0 15px; margin: 0; background: #fdfdfd; color: #2d3436; }
+        #cash-received:focus { border-color: #009688; outline: none; background: white; }
+        .checkout-btn { flex: 1; height: 100%; padding: 0; background: #009688; color: white; border: none; font-size: 18px; border-radius: 14px; font-weight: 800; text-transform: uppercase; letter-spacing: 1px; box-shadow: 0 4px 15px rgba(0,150,136,0.3); margin: 0; display: flex; align-items: center; justify-content: center; }
+        .checkout-btn:active { transform: scale(0.98); background: #00796b; }
+
+        /* --- MODALS --- */
+        .modal-overlay { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(45, 52, 54, 0.8); z-index: 2000; justify-content: center; align-items: center; padding: 20px; backdrop-filter: blur(3px); }
+        .modal-box { background: white; padding: 30px 25px; border-radius: 24px; width: 100%; max-width: 340px; text-align: center; animation: modalPop 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275); box-shadow: 0 20px 60px rgba(0,0,0,0.2); }
+        @keyframes modalPop { from { opacity: 0; transform: scale(0.8); } to { opacity: 1; transform: scale(1); } }
+        
+        .alert-icon { font-size: 48px; margin-bottom: 15px; display: block; }
+        .alert-title { margin: 0 0 10px 0; color: #2d3436; font-size: 22px; font-weight: 800; }
+        .alert-message { color: #636e72; font-size: 16px; margin-bottom: 25px; line-height: 1.5; }
+        .alert-btn { width: 100%; padding: 14px; background: #2d3436; color: white; border: none; border-radius: 12px; font-size: 16px; font-weight: 700; cursor: pointer; transition: background 0.2s; }
+        .alert-btn:active { background: #000; }
+        .confirm-actions { display: flex; gap: 12px; margin-top: 10px; }
+
+        /* Receipt Modal */
+        .receipt-value { font-weight: 700; color: #2d3436; font-size: 16px; }
+        .change-box { background-color: #ecfdf5; padding: 20px; border-radius: 16px; margin-top: 25px; border: 1px solid #d1fae5; }
+        .change-amount { font-size: 38px; color: #00b894; font-weight: 900; margin: 5px 0; letter-spacing: -1px; }
+        .receipt-next-btn { width: 100%; margin-top: 25px; padding: 16px; background: #2d3436; color: white; border: none; border-radius: 16px; font-size: 17px; font-weight: 800; }
+
+        /* Inventory & History */
+        .sticky-header { padding: 20px; background: white; border-bottom: 1px solid #f0f0f0; z-index: 10; }
+        .screen-title { margin: 0; color: #2d3436; font-size: 22px; font-weight: 800; display: flex; align-items: center; gap: 10px; }
+        .inventory-list, .history-list { overflow-y: auto; flex: 1; padding: 15px; background: #f4f6f8; padding-bottom: 80px; }
+        .list-card { background: white; padding: 18px; margin-bottom: 12px; border-radius: 16px; display: flex; justify-content: space-between; align-items: center; box-shadow: 0 4px 15px rgba(0,0,0,0.03); border: 1px solid #f0f0f0; }
+        .action-btn { border: none; padding: 10px; border-radius: 10px; font-size: 16px; cursor: pointer; transition: background 0.2s; }
+        
+        input, select { width: 100%; padding: 14px; margin-bottom: 12px; box-sizing: border-box; border: 2px solid #eee; border-radius: 12px; font-size: 16px; background: white; appearance: none; }
+        input:focus { border-color: #009688; outline: none; }
+        
+        #scanner-container { display: none; position: fixed; inset: 0; background: black; z-index: 3000; }
+        #reader { width: 100%; height: 100%; }
+        .close-scanner-btn { position: absolute; bottom: 40px; left: 50%; transform: translateX(-50%); background: rgba(255, 255, 255, 0.2); backdrop-filter: blur(5px); color: white; padding: 12px 30px; border: 1px solid rgba(255,255,255,0.3); border-radius: 30px; font-size: 16px; font-weight: 600; z-index: 3001; }
+    </style>
+</head>
+<body>
+
+    <div id="scanner-container">
+        <div id="reader"></div>
+        <button class="close-scanner-btn" onclick="stopScanner()">Close Camera</button>
+    </div>
+
+    <div id="scan-choice-modal" class="modal-overlay" onclick="closeModal(event)">
+        <div class="modal-box">
+            <div class="alert-icon">📷</div>
+            <h3 class="alert-title">Add Item</h3>
+            <button onclick="startScanner('cart')" style="width:100%; padding:20px; background:#009688; color:white; border:none; border-radius:16px; font-size:18px; font-weight:700; margin-bottom:20px; display:flex; align-items:center; justify-content:center; gap:10px; box-shadow: 0 8px 20px rgba(0,150,136,0.3);">Scan Barcode</button>
+            <div style="margin: 0 0 20px 0; color: #b2bec3; font-weight:600; font-size:14px;">OR TYPE CODE</div>
+            <input type="number" id="modal-input" placeholder="Barcode Number" style="text-align: center; font-size: 20px; font-weight: 700; margin-bottom:15px; border-color:#dfe6e9;">
+            <button onclick="handleManualInput()" class="alert-btn">ADD TO CART</button>
+        </div>
+    </div>
+
+    <div id="custom-alert" class="modal-overlay" onclick="closeAlert(event)">
+        <div class="modal-box">
+            <div id="alert-icon" class="alert-icon">⚠️</div>
+            <h3 id="alert-title" class="alert-title">Notice</h3>
+            <p id="alert-message" class="alert-message"></p>
+            <button onclick="closeAlert()" class="alert-btn">OK</button>
+        </div>
+    </div>
+
+    <div id="custom-confirm" class="modal-overlay">
+        <div class="modal-box">
+            <div class="alert-icon" style="font-size:40px;">🤔</div>
+            <h3 class="alert-title">Are you sure?</h3>
+            <p id="confirm-message" class="alert-message"></p>
+            <div class="confirm-actions">
+                <button onclick="closeConfirm()" class="alert-btn" style="background:#f1f2f6; color:#2d3436;">Cancel</button>
+                <button id="confirm-yes-btn" class="alert-btn" style="background:#009688;">Yes</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="receipt-modal" class="modal-overlay">
+        <div class="modal-box">
+            <div class="receipt-icon">🎉</div>
+            <h2 class="receipt-title">Payment Successful!</h2>
+            <hr style="border: 0; border-top: 2px dashed #f0f0f0; margin: 20px 0;">
+            <div style="display:flex; justify-content:space-between; margin-bottom:10px;"><span>Total Amount:</span><span id="r-total" class="receipt-value">0</span></div>
+            <div style="display:flex; justify-content:space-between;"><span>Cash Received:</span><span id="r-cash" class="receipt-value">0</span></div>
+            <div class="change-box">
+                <div style="color:#00b894; font-size:12px; font-weight:800; text-transform:uppercase; letter-spacing:1px;">Change to Return</div>
+                <div class="change-amount" id="r-change">0</div>
+            </div>
+            <button onclick="closeReceipt()" class="receipt-next-btn">Next Sale</button>
+        </div>
+    </div>
+
+    <div id="dashboard-screen" class="screen active-screen">
+        <div class="sticky-header"><h3 class="screen-title">📊 Dashboard</h3></div>
+        <div class="dash-container">
+            <div class="dash-card">
+                <div class="dash-title">Total Sales (Today)</div>
+                <div class="dash-value" id="dash-sales">0 Ks</div>
+            </div>
+            <div class="dash-card blue">
+                <div class="dash-title">Total Transactions</div>
+                <div class="dash-value" id="dash-orders">0</div>
+            </div>
+            <div class="best-seller-box">
+                <div class="dash-title" style="color:#b2bec3; border-bottom:1px solid #f5f5f5; padding-bottom:10px;">🏆 Best Selling Item</div>
+                <div style="font-size:20px; font-weight:800; color:#2d3436; margin-top:15px;" id="dash-best-item">-</div>
+                <div style="font-size:14px; color:#00b894; font-weight:600; margin-top:5px;" id="dash-best-qty"></div>
+            </div>
+        </div>
+    </div>
+
+    <div id="pos-screen" class="screen">
+        <div class="category-bar" id="category-bar"></div>
+        <div class="product-area"><div id="product-list" class="product-grid"></div></div>
+        <div class="cart-section">
+            <div class="cart-header">
+                <span class="cart-title">Shopping Cart</span>
+                <div class="cart-actions">
+                    <button class="icon-btn" onclick="openScanModal()">📷</button>
+                    <span class="clear-btn" onclick="clearCartVerify()">Clear</span>
+                </div>
+            </div>
+            <div id="cart-items" class="cart-list"></div>
+            <div class="cart-footer">
+                <div class="total-row"><span class="total-label">Total Amount</span><span id="total-display" class="total-amount">0 Ks</span></div>
+                <div class="checkout-actions">
+                    <input type="number" id="cash-received" placeholder="Cash">
+                    <button class="checkout-btn" onclick="checkout()">PAY</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div id="inventory-screen" class="screen">
+        <div class="sticky-header"><h3 class="screen-title">📦 Inventory</h3></div>
+        <div style="padding: 20px; background: white; border-bottom: 1px solid #eee;">
+            <input type="hidden" id="edit-index" value="-1">
+            <select id="new-category" style="margin-bottom: 12px;">
+                <option value="General">General</option>
+                <option value="Drinks">Drinks</option>
+                <option value="Food">Food</option>
+                <option value="Snacks">Snacks</option>
+                <option value="Household">Household</option>
+            </select>
+            <input type="text" id="new-name" placeholder="Item Name">
+            <div style="display:flex; gap:12px;">
+                <input type="number" id="new-price" placeholder="Price" style="flex:1">
+                <input type="number" id="new-stock" placeholder="Stock" style="flex:1">
+            </div>
+            <div style="display:flex; gap:12px; margin-top:0px;">
+                 <input type="text" id="new-code" placeholder="Barcode" style="flex:2">
+                 <button onclick="startScanner('new-code')" style="flex:1; background:#dfe6e9; color:#2d3436; border:none; border-radius:12px; font-weight:600;">Scan</button>
+            </div>
+            <div style="display:flex; gap:12px; margin-top:15px;">
+                <button onclick="saveProduct()" id="save-btn" style="background:#009688; color:white; border:none; padding:15px; flex:1; border-radius:12px; font-weight:800;">SAVE ITEM</button>
+                <button id="cancel-btn" onclick="resetForm()" style="background:#dfe6e9; color:#636e72; display:none; padding:15px; border:none; border-radius:12px; font-weight:700;">CANCEL</button>
+            </div>
+        </div>
+        <div id="inventory-list" class="inventory-list"></div>
+    </div>
+
+    <div id="history-screen" class="screen">
+        <div class="sticky-header" style="display: flex; justify-content: space-between;">
+            <h3 class="screen-title">📜 History</h3>
+            <button onclick="exportData()" style="background:#0984e3; color:white; border:none; padding:8px 15px; border-radius:8px; font-weight:700; font-size:13px;">Save Backup</button>
+        </div>
+        <div id="history-list" class="history-list"></div>
+    </div>
+
+    <div class="navbar">
+        <button onclick="showScreen('dashboard')" id="btn-dash" class="active"><span class="nav-icon">📊</span><span>Dash</span></button>
+        <button onclick="showScreen('pos')" id="btn-pos"><span class="nav-icon">⚡</span><span>Sell</span></button>
+        <button onclick="showScreen('inventory')" id="btn-inv"><span class="nav-icon">📦</span><span>Stock</span></button>
+        <button onclick="showScreen('history')" id="btn-hist"><span class="nav-icon">📜</span><span>History</span></button>
+    </div>
+
+    <script>
+        // PWA Service Worker Registration
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => {
+                navigator.serviceWorker.register('service-worker.js')
+                    .then(reg => console.log('SW registered:', reg))
+                    .catch(err => console.log('SW failed:', err));
+            });
+        }
+
+        // --- DATA ---
+        let products = JSON.parse(localStorage.getItem('myShopProducts')) || [
+            {code: "101", name: "Energy Drink", price: 1500, category: "Drinks", stock: 50},
+            {code: "102", name: "Bread", price: 2000, category: "Food", stock: 20}
+        ];
+        let salesHistory = JSON.parse(localStorage.getItem('myShopHistory')) || [];
+        let cart = [];
+        let currentFilter = 'All';
+        let scanner;
+
+        // --- DASHBOARD ---
+        function renderDashboard() {
+            let totalSales = 0;
+            let totalOrders = salesHistory.length;
+            let itemCounts = {};
+
+            salesHistory.forEach(sale => {
+                totalSales += sale.total;
+                let parts = sale.items.split(", ");
+                parts.forEach(p => {
+                    let [qtyStr, ...nameParts] = p.split("x ");
+                    let name = nameParts.join("x "); 
+                    let qty = parseInt(qtyStr);
+                    if(itemCounts[name]) itemCounts[name] += qty;
+                    else itemCounts[name] = qty;
+                });
+            });
+
+            let bestItem = "-";
+            let bestQty = 0;
+            for (const [name, qty] of Object.entries(itemCounts)) {
+                if (qty > bestQty) { bestQty = qty; bestItem = name; }
+            }
+
+            document.getElementById('dash-sales').innerText = totalSales.toLocaleString() + " Ks";
+            document.getElementById('dash-orders').innerText = totalOrders;
+            document.getElementById('dash-best-item').innerText = bestItem;
+            document.getElementById('dash-best-qty').innerText = bestQty > 0 ? bestQty + " sold" : "";
+        }
+
+        // --- ALERTS ---
+        function showAlert(msg, title="Notice", type="warning") {
+            document.getElementById('alert-title').innerText = title;
+            document.getElementById('alert-message').innerText = msg;
+            const icon = document.getElementById('alert-icon');
+            if(type==='error') { icon.innerText='❌'; } else if(type==='success') { icon.innerText='✅'; } else { icon.innerText='⚠️'; }
+            document.getElementById('custom-alert').style.display = 'flex';
+        }
+        function closeAlert() { document.getElementById('custom-alert').style.display = 'none'; }
+        
+        function showConfirm(msg, onYes) {
+            document.getElementById('confirm-message').innerText = msg;
+            document.getElementById('custom-confirm').style.display = 'flex';
+            document.getElementById('confirm-yes-btn').onclick = function() { onYes(); closeConfirm(); };
+        }
+        function closeConfirm() { document.getElementById('custom-confirm').style.display = 'none'; }
+
+        // --- POS ---
+        function renderCategories() {
+            const cats = ['All', ...new Set(products.map(p => p.category || 'General'))];
+            const bar = document.getElementById('category-bar');
+            bar.innerHTML = '';
+            cats.forEach(cat => {
+                bar.innerHTML += `<button class="cat-chip ${cat === currentFilter ? 'active' : ''}" onclick="setFilter('${cat}')">${cat}</button>`;
+            });
+        }
+        function setFilter(cat) { currentFilter = cat; renderCategories(); renderPOS(); }
+
+        function renderPOS() {
+            const list = document.getElementById('product-list');
+            list.innerHTML = '';
+            const filtered = currentFilter === 'All' ? products : products.filter(p => p.category === currentFilter);
+            
+            filtered.forEach(p => {
+                let stockClass = p.stock <= 0 ? "out-of-stock" : "";
+                let stockText = p.stock <= 0 ? "Out of Stock" : "Stock: " + p.stock;
+                
+                list.innerHTML += `
+                    <div class="product-btn ${stockClass}" onclick="addToCart('${p.code}')">
+                        <span class="product-name">${p.name}</span>
+                        <span class="product-price">${p.price.toLocaleString()} Ks</span>
+                        <span class="stock-badge">${stockText}</span>
+                    </div>`;
+            });
+        }
+
+        function addToCart(code) {
+            if(!code) return;
+            const product = products.find(p => p.code === code);
+            
+            if (product) {
+                if(product.stock <= 0) return showAlert("This item is out of stock!", "Stock Error", "error");
+                const existingItem = cart.find(item => item.code === code);
+                let currentCartQty = existingItem ? existingItem.qty : 0;
+                
+                if(currentCartQty + 1 > product.stock) return showAlert("Not enough stock available!", "Stock Limit", "error");
+
+                if (existingItem) { existingItem.qty += 1; } 
+                else { cart.push({ ...product, qty: 1 }); }
+                updateCartUI();
+                
+                document.getElementById('scan-choice-modal').style.display = 'none';
+                document.getElementById('modal-input').value = '';
+            } else {
+                showConfirm("Item not found. Add to inventory?", function() {
+                    document.getElementById('scan-choice-modal').style.display = 'none';
+                    document.getElementById('modal-input').value = '';
+                    showScreen('inventory');
+                    document.getElementById('new-code').value = code;
+                });
+            }
+        }
+
+        function updateCartUI() {
+            const container = document.getElementById('cart-items');
+            container.innerHTML = '';
+            let total = 0;
+            [...cart].reverse().forEach((item, rIndex) => {
+                const realIndex = cart.length - 1 - rIndex; 
+                total += item.price * item.qty;
+                container.innerHTML += `
+                    <div class="cart-item">
+                        <div style="flex:1;">
+                            <div class="cart-item-name"><span class="cart-qty-badge">${item.qty}x</span> ${item.name}</div>
+                        </div>
+                        <div class="cart-item-price">${(item.price*item.qty).toLocaleString()}</div>
+                        <div class="cart-item-remove" onclick="removeFromCart(${realIndex})">✕</div>
+                    </div>`;
+            });
+            document.getElementById('total-display').innerText = total.toLocaleString() + " Ks";
+        }
+        function removeFromCart(index) { cart.splice(index, 1); updateCartUI(); }
+        function clearCartVerify() { if(cart.length>0) showConfirm("Clear cart?", function(){ cart=[]; updateCartUI(); }); }
+
+        function checkout() {
+            if(cart.length === 0) return showAlert("Cart is empty.", "Empty");
+            const total = cart.reduce((a, b) => a + (b.price * b.qty), 0);
+            const cash = parseFloat(document.getElementById('cash-received').value);
+            if (!cash || cash < total) return showAlert("Not enough cash!", "Error", "error");
+
+            cart.forEach(cartItem => {
+                let productIndex = products.findIndex(p => p.code === cartItem.code);
+                if(productIndex !== -1) { products[productIndex].stock -= cartItem.qty; }
+            });
+            localStorage.setItem('myShopProducts', JSON.stringify(products));
+
+            const change = cash - total;
+            salesHistory.unshift({ id: Date.now(), date: new Date().toLocaleString(), total: total, items: cart.map(i => `${i.qty}x ${i.name}`).join(", ") });
+            localStorage.setItem('myShopHistory', JSON.stringify(salesHistory));
+            
+            renderDashboard(); renderPOS(); renderInventory(); 
+
+            document.getElementById('r-total').innerText = total.toLocaleString() + " Ks";
+            document.getElementById('r-cash').innerText = cash.toLocaleString() + " Ks";
+            document.getElementById('r-change').innerText = change.toLocaleString();
+            document.getElementById('receipt-modal').style.display = 'flex';
+
+            cart = []; updateCartUI(); document.getElementById('cash-received').value = '';
+        }
+        function closeReceipt() { document.getElementById('receipt-modal').style.display = 'none'; }
+
+        // --- INVENTORY ---
+        function renderInventory() {
+            const list = document.getElementById('inventory-list');
+            list.innerHTML = '';
+            products.forEach((p, index) => {
+                let stockColor = p.stock < 5 ? "color:#e17055" : "color:#00b894";
+                list.innerHTML += `
+                    <div class="list-card">
+                        <div style="flex:1;">
+                            <div style="font-weight:700; color:#2d3436; font-size:16px;">${p.name}</div>
+                            <div style="color:#b2bec3; font-size:13px; margin-top:2px;">${p.category} | ${p.code}</div>
+                            <div style="font-weight:700; margin-top:6px; font-size:14px;">${p.price.toLocaleString()} Ks | <span style="${stockColor}">Stock: ${p.stock}</span></div>
+                        </div>
+                        <div style="display:flex; gap:8px;">
+                            <button class="action-btn" onclick="editProduct(${index})" style="background:#dfe6e9; color:#636e72;">✏️</button>
+                            <button class="action-btn" onclick="deleteProduct(${index})" style="background:#ff7675; color:white;">🗑️</button>
+                        </div>
+                    </div>`;
+            });
+            renderCategories();
+        }
+
+        function saveProduct() {
+            const name = document.getElementById('new-name').value;
+            const price = parseInt(document.getElementById('new-price').value);
+            const stock = parseInt(document.getElementById('new-stock').value);
+            const code = document.getElementById('new-code').value;
+            const cat = document.getElementById('new-category').value;
+            const index = parseInt(document.getElementById('edit-index').value);
+
+            if(!name || !price || !code || isNaN(stock)) return showAlert("Fill all fields", "Missing Info");
+            if(index === -1 && products.some(p => p.code === code)) return showAlert("Barcode exists!", "Error", "error");
+
+            const productObj = {name, price, stock, code, category: cat};
+            if (index === -1) products.push(productObj); else products[index] = productObj;
+
+            localStorage.setItem('myShopProducts', JSON.stringify(products));
+            renderInventory(); renderPOS(); resetForm(); showAlert("Saved!", "Success", "success");
+        }
+
+        function editProduct(index) {
+            const p = products[index];
+            document.getElementById('new-name').value = p.name;
+            document.getElementById('new-price').value = p.price;
+            document.getElementById('new-stock').value = p.stock;
+            document.getElementById('new-code').value = p.code;
+            document.getElementById('new-category').value = p.category || 'General';
+            document.getElementById('edit-index').value = index;
+            document.getElementById('save-btn').innerText = "UPDATE ITEM";
+            document.getElementById('save-btn').style.background = "#f39c12";
+            document.getElementById('cancel-btn').style.display = "block";
+            showScreen('inventory');
+        }
+
+        function deleteProduct(index) {
+            showConfirm("Delete this item?", function() {
+                products.splice(index, 1);
+                localStorage.setItem('myShopProducts', JSON.stringify(products));
+                renderInventory(); renderPOS();
+            });
+        }
+        function resetForm() {
+            document.getElementById('new-name').value = '';
+            document.getElementById('new-price').value = '';
+            document.getElementById('new-stock').value = '';
+            document.getElementById('new-code').value = '';
+            document.getElementById('edit-index').value = '-1';
+            document.getElementById('save-btn').innerText = "SAVE ITEM";
+            document.getElementById('save-btn').style.background = "#009688";
+            document.getElementById('cancel-btn').style.display = "none";
+        }
+
+        // --- HISTORY ---
+        function renderHistory() {
+            const list = document.getElementById('history-list');
+            list.innerHTML = '';
+            salesHistory.forEach(sale => {
+                list.innerHTML += `<div class="list-card" style="border-left:5px solid #0984e3;"><div style="flex:1;"><div style="font-weight:800; font-size:18px; color:#2d3436;">${sale.total.toLocaleString()} Ks</div><div style="color:#b2bec3; font-size:12px; margin-top:2px;">${sale.date}</div><div style="font-size:13px; margin-top:8px; color:#636e72; line-height:1.4;">${sale.items}</div></div></div>`;
+            });
+        }
+        function exportData() {
+            const data = { products, history: salesHistory };
+            const blob = new Blob([JSON.stringify(data, null, 2)], {type: 'application/json'});
+            const a = document.createElement('a'); a.href = URL.createObjectURL(blob); 
+            a.download = 'POS_Backup.json'; document.body.appendChild(a); a.click(); document.body.removeChild(a);
+        }
+
+        // --- UI ---
+        function showScreen(name) {
+            document.querySelectorAll('.screen').forEach(s => s.classList.remove('active-screen'));
+            document.getElementById(name + '-screen').classList.add('active-screen');
+            document.querySelectorAll('.navbar button').forEach(b => b.classList.remove('active'));
+            document.getElementById('btn-'+(name==='dashboard'?'dash':name==='inventory'?'inv':name==='history'?'hist':'pos')).classList.add('active');
+            if(name === 'dashboard') renderDashboard();
+        }
+        
+        function openScanModal() { document.getElementById('scan-choice-modal').style.display = 'flex'; setTimeout(() => document.getElementById('modal-input').focus(), 100); }
+        function closeModal(e) { if(e.target.id === 'scan-choice-modal') document.getElementById('scan-choice-modal').style.display = 'none'; }
+        function handleManualInput() { addToCart(document.getElementById('modal-input').value); }
+        document.getElementById('modal-input').addEventListener('keypress', function (e) { if (e.key === 'Enter') handleManualInput(); });
+
+        function startScanner(targetId) {
+            document.getElementById('scan-choice-modal').style.display = 'none';
+            document.getElementById('scanner-container').style.display = 'block';
+            scanner = new Html5Qrcode("reader");
+            scanner.start({ facingMode: "environment" }, { fps: 10, qrbox: 250 }, (decoded) => {
+                stopScanner();
+                if(targetId === 'new-code') document.getElementById('new-code').value = decoded;
+                else addToCart(decoded);
+            }, () => {}).catch(err => { stopScanner(); showAlert("Camera Error.", "Error", "error"); });
+        }
+        function stopScanner() {
+            if(scanner) scanner.stop().then(() => { scanner.clear(); document.getElementById('scanner-container').style.display = 'none'; });
+            else document.getElementById('scanner-container').style.display = 'none';
+        }
+
+        renderDashboard(); renderCategories(); renderPOS(); renderInventory(); renderHistory();
+    </script>
+</body>
+</html>
+
