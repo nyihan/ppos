@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Myanmar POS Pro v18 (Qty Control)</title>
+    <title>Myanmar POS Pro v19 (UI Fix)</title>
     
     <link rel="manifest" href="manifest.json">
     <meta name="theme-color" content="#ffffff">
@@ -17,14 +17,23 @@
         body { font-family: 'Segoe UI', sans-serif; margin: 0; padding: 0; background: var(--bg); height: 100vh; display: flex; flex-direction: column; overflow: hidden; user-select: none; }
         * { -webkit-tap-highlight-color: transparent; box-sizing: border-box; }
 
-        /* --- UI COMPONENTS --- */
-        .navbar { background: white; flex-shrink: 0; display: flex; z-index: 100; box-shadow: 0 2px 10px rgba(0,0,0,0.05); border-top: 1px solid #eee; padding-bottom: env(safe-area-inset-bottom); }
-        .navbar button { flex: 1; padding: 10px 0; border: none; background: transparent; color: #b2bec3; font-size: 10px; display: flex; flex-direction: column; align-items: center; gap: 4px; }
+        /* --- LAYOUT FIX (SCREEN & NAVBAR) --- */
+        .navbar { background: white; flex-shrink: 0; display: flex; z-index: 100; box-shadow: 0 -2px 10px rgba(0,0,0,0.05); border-top: 1px solid #eee; padding-bottom: env(safe-area-inset-bottom); height: 60px; }
+        .navbar button { flex: 1; padding: 5px 0; border: none; background: transparent; color: #b2bec3; font-size: 10px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; }
         .navbar button.active { color: var(--primary); }
         .nav-icon { font-size: 20px; }
 
-        .screen { display: none; flex-direction: column; height: 100%; position: relative; }
+        /* Important: flex: 1 ensures screen takes remaining space correctly */
+        .screen { display: none; flex-direction: column; flex: 1; overflow: hidden; position: relative; height: auto; }
         .active-screen { display: flex; }
+
+        /* --- TOAST MESSAGE (CUSTOM) --- */
+        #toast {
+            visibility: hidden; min-width: 250px; background-color: #2d3436; color: #fff; text-align: center; border-radius: 30px; padding: 12px 20px;
+            position: fixed; z-index: 6000; left: 50%; bottom: 80px; transform: translateX(-50%); font-size: 14px; font-weight: 600;
+            opacity: 0; transition: opacity 0.3s, bottom 0.3s; box-shadow: 0 5px 15px rgba(0,0,0,0.3);
+        }
+        #toast.show { visibility: visible; opacity: 1; bottom: 90px; }
 
         /* --- POS LAYOUT --- */
         .product-area { flex: 1; overflow-y: auto; padding: 10px; background: var(--bg); padding-bottom: 200px; }
@@ -56,7 +65,7 @@
         .cart-list { flex: 1; overflow-y: auto; padding: 0 15px; background: #fff; }
         .cart-item { display: flex; justify-content: space-between; padding: 12px 0; border-bottom: 1px solid #f9f9f9; align-items: center; }
         .cart-qty-badge { background: var(--dark); color: white; padding: 2px 8px; border-radius: 10px; font-size: 12px; margin-right: 8px; font-weight: 700; }
-        .cart-footer { padding: 15px; background: white; border-top: 1px solid #f0f0f0; }
+        .cart-footer { padding: 15px; background: white; border-top: 1px solid #f0f0f0; padding-bottom: 25px; }
         .checkout-btn { width: 100%; padding: 15px; background: var(--primary); color: white; border: none; border-radius: 12px; font-size: 18px; font-weight: 800; display: flex; justify-content: space-between; align-items: center; box-shadow: 0 4px 15px rgba(0,184,148,0.3); }
 
         /* MODALS */
@@ -75,6 +84,7 @@
         .dash-container { padding: 15px; overflow-y: auto; background: var(--bg); padding-bottom: 80px; }
         .dash-card { background: linear-gradient(135deg, #00b894, #00cec9); color: white; padding: 20px; border-radius: 16px; margin-bottom: 12px; box-shadow: 0 5px 15px rgba(0,184,148,0.2); }
         .sticky-header { padding: 15px; background: white; border-bottom: 1px solid #f0f0f0; display: flex; justify-content: space-between; align-items: center; }
+        /* List Card Fix */
         .list-card { background: white; padding: 15px; margin-bottom: 10px; border-radius: 12px; box-shadow: 0 2px 5px rgba(0,0,0,0.03); display: flex; justify-content: space-between; align-items: center; }
         .action-btn { border: none; padding: 8px 12px; border-radius: 8px; font-size: 12px; font-weight: 600; cursor:pointer; }
         .date-header { position: sticky; top: 0; background: var(--bg); padding: 8px 5px; font-size: 13px; font-weight: 700; color: #636e72; z-index: 5; }
@@ -96,11 +106,17 @@
         .close-scanner-btn { position: absolute; bottom: 50px; left: 50%; transform: translateX(-50%); background: rgba(255,255,255,0.2); padding: 10px 20px; border-radius: 30px; color: white; border: 1px solid rgba(255,255,255,0.5); font-weight: 600; z-index: 3001; }
         
         input, select { width: 100%; padding: 14px; margin-bottom: 12px; box-sizing: border-box; border: 2px solid #eee; border-radius: 12px; font-size: 16px; background: white; appearance: none; }
+        
+        /* SCROLL FIX */
+        .inventory-list, .history-list { overflow-y: auto; flex: 1; padding: 15px; background: #f4f6f8; }
     </style>
 </head>
 <body>
 
     <div id="sync-status"><div class="dot"></div><span id="sync-text">Offline</span></div>
+    
+    <!-- TOAST MESSAGE -->
+    <div id="toast"></div>
 
     <!-- EXPORT TEMPLATE -->
     <div id="receipt-export">
@@ -197,7 +213,7 @@
 
     <div id="inventory-screen" class="screen">
         <div class="sticky-header"><h3>📦 Stock</h3></div>
-        <div style="padding:15px; background:white;">
+        <div style="padding:15px; background:white; flex-shrink: 0;">
             <input type="hidden" id="edit-index" value="-1">
             <select id="new-category" style="margin-bottom:10px;"><option>General</option><option>Drinks</option><option>Food</option><option>Snacks</option></select>
             <input type="text" id="new-name" placeholder="Item Name">
@@ -257,6 +273,28 @@
         let cart = [];
         let currentFilter = 'All';
         let scanner;
+
+        // --- BACK BUTTON LOGIC ---
+        let lastBackPressTime = 0;
+        history.pushState(null, null, location.href); 
+        window.onpopstate = function(event) {
+            const now = new Date().getTime();
+            if (now - lastBackPressTime < 2000) {
+                // Allow exit (default browser behavior if we don't push state)
+                // Since we can't force close easily, we just don't push state again.
+            } else {
+                lastBackPressTime = now;
+                history.pushState(null, null, location.href);
+                showToast("Press back again to exit (ထွက်ရန် နောက်တစ်ကြိမ်ထပ်နှိပ်ပါ)");
+            }
+        };
+
+        function showToast(msg) {
+            const t = document.getElementById('toast');
+            t.innerText = msg;
+            t.classList.add('show');
+            setTimeout(() => t.classList.remove('show'), 2000);
+        }
 
         // --- SLIDING CART ---
         function toggleCart() { document.getElementById('cart-section').classList.toggle('expanded'); }
