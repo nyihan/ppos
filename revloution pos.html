@@ -1,0 +1,632 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Myanmar POS Pro v18 (Qty Control)</title>
+    
+    <link rel="manifest" href="manifest.json">
+    <meta name="theme-color" content="#ffffff">
+    
+    <script src="https://unpkg.com/html5-qrcode" type="text/javascript"></script>
+    <script src="https://html2canvas.hertzen.com/dist/html2canvas.min.js"></script>
+    
+    <style>
+        /* --- BASE STYLES --- */
+        :root { --primary: #00b894; --dark: #2d3436; --light: #dfe6e9; --bg: #f4f6f8; }
+        body { font-family: 'Segoe UI', sans-serif; margin: 0; padding: 0; background: var(--bg); height: 100vh; display: flex; flex-direction: column; overflow: hidden; user-select: none; }
+        * { -webkit-tap-highlight-color: transparent; box-sizing: border-box; }
+
+        /* --- UI COMPONENTS --- */
+        .navbar { background: white; flex-shrink: 0; display: flex; z-index: 100; box-shadow: 0 2px 10px rgba(0,0,0,0.05); border-top: 1px solid #eee; padding-bottom: env(safe-area-inset-bottom); }
+        .navbar button { flex: 1; padding: 10px 0; border: none; background: transparent; color: #b2bec3; font-size: 10px; display: flex; flex-direction: column; align-items: center; gap: 4px; }
+        .navbar button.active { color: var(--primary); }
+        .nav-icon { font-size: 20px; }
+
+        .screen { display: none; flex-direction: column; height: 100%; position: relative; }
+        .active-screen { display: flex; }
+
+        /* --- POS LAYOUT --- */
+        .product-area { flex: 1; overflow-y: auto; padding: 10px; background: var(--bg); padding-bottom: 200px; }
+        .category-bar { display: flex; gap: 8px; margin-bottom: 10px; overflow-x: auto; padding-bottom: 5px; flex-shrink: 0; }
+        .cat-chip { padding: 6px 14px; background: white; border-radius: 20px; font-size: 13px; color: #636e72; border: 1px solid #eee; white-space: nowrap; }
+        .cat-chip.active { background: var(--primary); color: white; border-color: var(--primary); }
+
+        .product-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+        .product-btn { background: white; border: 1px solid #eee; padding: 8px; text-align: center; border-radius: 12px; min-height: 90px; display: flex; flex-direction: column; justify-content: center; position: relative; }
+        .product-btn:active { background: #f0f0f0; transform: scale(0.98); }
+        .product-name { font-weight: 600; font-size: 12px; color: var(--dark); margin-bottom: 4px; line-height: 1.2; height: 28px; overflow: hidden; }
+        .product-price { color: var(--primary); font-weight: 800; font-size: 13px; }
+        .stock-badge { font-size: 9px; color: #b2bec3; background: #f8f9fa; padding: 2px 5px; border-radius: 4px; margin-top: 4px; display: inline-block; }
+        .out-of-stock { opacity: 0.5; pointer-events: none; }
+        .out-of-stock .stock-badge { color: red; background: #ffebee; }
+
+        /* SLIDING CART */
+        .cart-section {
+            position: fixed; bottom: 55px; left: 0; width: 100%;
+            background: white; border-radius: 20px 20px 0 0;
+            box-shadow: 0 -5px 20px rgba(0,0,0,0.1);
+            display: flex; flex-direction: column;
+            height: 45vh; transition: height 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
+            z-index: 50;
+        }
+        .cart-section.expanded { height: 85vh; }
+        .cart-header { padding: 10px 15px; border-bottom: 1px solid #f0f0f0; display: flex; justify-content: space-between; align-items: center; cursor: pointer; background: #fff; border-radius: 20px 20px 0 0; }
+        .cart-handle { width: 40px; height: 4px; background: #dfe6e9; border-radius: 2px; margin: 0 auto 10px; }
+        .cart-list { flex: 1; overflow-y: auto; padding: 0 15px; background: #fff; }
+        .cart-item { display: flex; justify-content: space-between; padding: 12px 0; border-bottom: 1px solid #f9f9f9; align-items: center; }
+        .cart-qty-badge { background: var(--dark); color: white; padding: 2px 8px; border-radius: 10px; font-size: 12px; margin-right: 8px; font-weight: 700; }
+        .cart-footer { padding: 15px; background: white; border-top: 1px solid #f0f0f0; }
+        .checkout-btn { width: 100%; padding: 15px; background: var(--primary); color: white; border: none; border-radius: 12px; font-size: 18px; font-weight: 800; display: flex; justify-content: space-between; align-items: center; box-shadow: 0 4px 15px rgba(0,184,148,0.3); }
+
+        /* MODALS */
+        .modal-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.6); z-index: 2000; justify-content: center; align-items: center; backdrop-filter: blur(2px); }
+        .modal-box { background: white; padding: 25px; border-radius: 20px; width: 90%; max-width: 350px; text-align: center; animation: popUp 0.3s ease-out; }
+        @keyframes popUp { from { transform: scale(0.8); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+        
+        .pay-input { width: 100%; padding: 15px; font-size: 24px; text-align: center; border: 2px solid #eee; border-radius: 12px; margin: 20px 0; font-weight: bold; }
+        .quick-cash { display: flex; gap: 10px; justify-content: center; margin-bottom: 20px; }
+        .chip { padding: 8px 12px; background: #f1f2f6; border-radius: 20px; font-size: 13px; font-weight: 600; cursor: pointer; }
+        
+        .alert-btn { width: 100%; padding: 12px; background: var(--dark); color: white; border: none; border-radius: 10px; font-weight: 700; font-size: 16px; margin-top: 10px; }
+        .confirm-actions { display: flex; gap: 10px; margin-top: 15px; }
+
+        /* Dashboard & List */
+        .dash-container { padding: 15px; overflow-y: auto; background: var(--bg); padding-bottom: 80px; }
+        .dash-card { background: linear-gradient(135deg, #00b894, #00cec9); color: white; padding: 20px; border-radius: 16px; margin-bottom: 12px; box-shadow: 0 5px 15px rgba(0,184,148,0.2); }
+        .sticky-header { padding: 15px; background: white; border-bottom: 1px solid #f0f0f0; display: flex; justify-content: space-between; align-items: center; }
+        .list-card { background: white; padding: 15px; margin-bottom: 10px; border-radius: 12px; box-shadow: 0 2px 5px rgba(0,0,0,0.03); display: flex; justify-content: space-between; align-items: center; }
+        .action-btn { border: none; padding: 8px 12px; border-radius: 8px; font-size: 12px; font-weight: 600; cursor:pointer; }
+        .date-header { position: sticky; top: 0; background: var(--bg); padding: 8px 5px; font-size: 13px; font-weight: 700; color: #636e72; z-index: 5; }
+
+        /* Refund Item Row */
+        .refund-item { display: flex; justify-content: space-between; align-items: center; padding: 10px 0; border-bottom: 1px solid #eee; }
+        .refund-qty-btn { background: #ff7675; color: white; border: none; padding: 5px 10px; border-radius: 5px; font-size: 12px; font-weight: bold; }
+
+        #sync-status { position: fixed; top: 10px; right: 10px; background: white; padding: 5px 10px; border-radius: 15px; font-size: 11px; font-weight: 700; display: flex; gap: 5px; align-items: center; box-shadow: 0 2px 5px rgba(0,0,0,0.1); z-index: 5000; }
+        .dot { width: 8px; height: 8px; border-radius: 50%; background: #ccc; }
+        .synced .dot { background: var(--primary); }
+        .syncing .dot { background: #f1c40f; animation: pulse 1s infinite; }
+        .error .dot { background: #ff7675; }
+        @keyframes pulse { 50% { opacity: 0.5; } }
+
+        #receipt-export { position: absolute; left: -9999px; background: white; padding: 20px; width: 300px; font-family: monospace; }
+        #scanner-container { display: none; position: fixed; inset: 0; background: black; z-index: 3000; }
+        #reader { width: 100%; height: 100%; }
+        .close-scanner-btn { position: absolute; bottom: 50px; left: 50%; transform: translateX(-50%); background: rgba(255,255,255,0.2); padding: 10px 20px; border-radius: 30px; color: white; border: 1px solid rgba(255,255,255,0.5); font-weight: 600; z-index: 3001; }
+        
+        input, select { width: 100%; padding: 14px; margin-bottom: 12px; box-sizing: border-box; border: 2px solid #eee; border-radius: 12px; font-size: 16px; background: white; appearance: none; }
+    </style>
+</head>
+<body>
+
+    <div id="sync-status"><div class="dot"></div><span id="sync-text">Offline</span></div>
+
+    <!-- EXPORT TEMPLATE -->
+    <div id="receipt-export">
+        <div style="text-align:center; font-weight:bold; font-size:18px; margin-bottom:10px;">MY SHOP</div>
+        <div style="border-bottom:1px dashed #000; padding-bottom:5px; margin-bottom:10px;">Date: <span id="r-exp-date"></span><br>ID: <span id="r-exp-id"></span></div>
+        <div id="r-exp-items"></div>
+        <div style="border-top:1px dashed #000; margin-top:10px; padding-top:5px; text-align:right; font-weight:bold;">Total: <span id="r-exp-total"></span></div>
+    </div>
+
+    <!-- MAIN POS -->
+    <div id="pos-screen" class="screen active-screen">
+        <div class="product-area">
+            <div class="category-bar" id="category-bar"></div>
+            <div id="product-list" class="product-grid"></div>
+        </div>
+        <div class="cart-section" id="cart-section">
+            <div class="cart-header" onclick="toggleCart()">
+                <div style="text-align:center; width:100%;">
+                    <div class="cart-handle"></div>
+                    <span style="font-size:12px; color:#b2bec3; font-weight:600;">TAP TO EXPAND / COLLAPSE</span>
+                </div>
+                <div style="position:absolute; right:15px; top:15px; display:flex; gap:10px;">
+                    <span onclick="event.stopPropagation(); openScanModal()" style="font-size:20px;">📷</span>
+                    <span onclick="event.stopPropagation(); clearCartVerify()" style="font-size:20px; color:#ff7675;">🗑️</span>
+                </div>
+            </div>
+            <div id="cart-items" class="cart-list"></div>
+            <div class="cart-footer">
+                <button class="checkout-btn" onclick="openPaymentModal()">
+                    <span>CHARGE</span>
+                    <span id="total-display">0 Ks</span>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- PAYMENT MODAL -->
+    <div id="payment-modal" class="modal-overlay">
+        <div class="modal-box">
+            <h2 style="margin:0; color:var(--dark);">Total: <span id="pay-total" style="color:var(--primary);">0</span></h2>
+            <p style="color:#636e72; font-size:14px; margin-bottom:5px;">Enter cash received</p>
+            <div class="quick-cash">
+                <div class="chip" onclick="fillCash(1000)">+1000</div>
+                <div class="chip" onclick="fillCash(5000)">+5000</div>
+                <div class="chip" onclick="fillCash(10000)">+10000</div>
+            </div>
+            <input type="number" id="cash-input" class="pay-input" placeholder="0" autofocus>
+            <div style="display:flex; gap:10px;">
+                <button onclick="document.getElementById('payment-modal').style.display='none'" class="alert-btn" style="background:#dfe6e9; color:#333;">Cancel</button>
+                <button onclick="processPayment()" class="alert-btn" style="background:var(--primary);">PAY NOW</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- RECEIPT MODAL -->
+    <div id="receipt-modal" class="modal-overlay">
+        <div class="modal-box">
+            <div style="font-size:50px;">🎉</div>
+            <h2 style="margin:10px 0;">Success</h2>
+            <div style="display:flex; justify-content:space-between; margin-bottom:5px;"><span>Total:</span><span id="r-total" style="font-weight:bold;">0</span></div>
+            <div style="display:flex; justify-content:space-between; margin-bottom:15px;"><span>Cash:</span><span id="r-cash" style="font-weight:bold;">0</span></div>
+            <div style="background:#ecfdf5; padding:15px; border-radius:12px; margin-bottom:20px;">
+                <div style="color:var(--primary); font-size:12px; font-weight:800; text-transform:uppercase;">Change Due</div>
+                <div id="r-change" style="font-size:32px; color:var(--primary); font-weight:900;">0</div>
+            </div>
+            <button onclick="closeReceipt()" class="alert-btn">Next Sale</button>
+        </div>
+    </div>
+
+    <!-- REFUND MODAL -->
+    <div id="refund-modal" class="modal-overlay" onclick="closeRefundModal(event)">
+        <div class="modal-box" style="max-width: 380px;">
+            <h3 style="margin-top:0; color:#ff7675;">Refund</h3>
+            <p style="font-size:13px; color:#636e72;">Select item to return to stock.</p>
+            <div id="refund-list" style="max-height: 300px; overflow-y: auto; text-align: left; margin-bottom: 15px;"></div>
+            <button onclick="document.getElementById('refund-modal').style.display='none'" class="alert-btn" style="background:#dfe6e9; color:#333;">Close</button>
+        </div>
+    </div>
+
+    <!-- OTHER SCREENS -->
+    <div id="dashboard-screen" class="screen">
+        <div class="sticky-header"><h3>📊 Dashboard</h3></div>
+        <div class="dash-container">
+            <div class="dash-card">
+                <div class="dash-title">Today's Sales</div>
+                <div class="dash-value" id="dash-sales">0 Ks</div>
+            </div>
+            <div class="dash-card" style="background: linear-gradient(135deg, #0984e3, #74b9ff);">
+                <div class="dash-title">Total Orders</div>
+                <div class="dash-value" id="dash-orders">0</div>
+            </div>
+        </div>
+    </div>
+
+    <div id="inventory-screen" class="screen">
+        <div class="sticky-header"><h3>📦 Stock</h3></div>
+        <div style="padding:15px; background:white;">
+            <input type="hidden" id="edit-index" value="-1">
+            <select id="new-category" style="margin-bottom:10px;"><option>General</option><option>Drinks</option><option>Food</option><option>Snacks</option></select>
+            <input type="text" id="new-name" placeholder="Item Name">
+            <div style="display:flex; gap:10px; margin-top:10px;">
+                <input type="number" id="new-price" placeholder="Price" style="flex:1">
+                <input type="number" id="new-stock" placeholder="Stock" style="flex:1">
+            </div>
+            <div style="display:flex; gap:10px; margin-top:10px;">
+                <input type="text" id="new-code" placeholder="Barcode" style="flex:2">
+                <button onclick="startScanner('new-code')" class="action-btn" style="background:#dfe6e9;">Scan</button>
+            </div>
+            <button onclick="saveProduct()" id="save-btn" class="alert-btn" style="background:var(--primary); margin-top:15px;">SAVE ITEM</button>
+        </div>
+        <div id="inventory-list" class="inventory-list"></div>
+    </div>
+
+    <div id="history-screen" class="screen">
+        <div class="sticky-header" style="justify-content:space-between;">
+            <h3>📜 History</h3>
+            <button onclick="autoSyncDownload(true)" class="action-btn" style="background:#6c5ce7; color:white;">Sync ⬇️</button>
+        </div>
+        <div id="history-list" class="history-list"></div>
+    </div>
+
+    <!-- COMMON MODALS -->
+    <div id="custom-alert" class="modal-overlay" onclick="closeAlert()"><div class="modal-box"><h3 id="alert-title">Notice</h3><p id="alert-message"></p><button onclick="closeAlert()" class="alert-btn">OK</button></div></div>
+    <div id="custom-confirm" class="modal-overlay"><div class="modal-box"><h3>Confirm?</h3><p id="confirm-message"></p><div class="confirm-actions"><button onclick="closeConfirm()" class="alert-btn" style="background:#dfe6e9; color:#333;">No</button><button id="confirm-yes-btn" class="alert-btn" style="background:var(--primary);">Yes</button></div></div></div>
+    
+    <div id="scan-choice-modal" class="modal-overlay" onclick="closeModal(event)">
+        <div class="modal-box">
+            <h3>Add Item</h3>
+            <button onclick="startScanner('cart')" class="alert-btn" style="background:var(--primary); margin-bottom:15px;">📷 Camera</button>
+            <input type="number" id="modal-input" placeholder="Barcode" style="text-align:center; font-size:20px; font-weight:bold; width:100%; padding:10px; margin-bottom:10px;">
+            <button onclick="handleManualInput()" class="alert-btn">Enter</button>
+        </div>
+    </div>
+    <div id="scanner-container"><div id="reader"></div><button class="close-scanner-btn" onclick="stopScanner()">Close</button></div>
+
+    <div class="navbar">
+        <button onclick="showScreen('dashboard')" id="btn-dash" class="active"><span class="nav-icon">📊</span><span>Dash</span></button>
+        <button onclick="showScreen('pos')" id="btn-pos"><span class="nav-icon">⚡</span><span>Sell</span></button>
+        <button onclick="showScreen('inventory')" id="btn-inv"><span class="nav-icon">📦</span><span>Stock</span></button>
+        <button onclick="showScreen('history')" id="btn-hist"><span class="nav-icon">📜</span><span>History</span></button>
+    </div>
+
+    <script>
+        // CONFIG
+        const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbwX0aG1RfowaxXfHPNaPgxYSzQyL1wRnA78S0F3ZSpUiP-NA2CLIDBDuq1utof4DWX3/exec"; 
+        const SYNC_INTERVAL = 60000;
+
+        // DATA
+        let products = JSON.parse(localStorage.getItem('myShopProducts')) || [
+            {code: "101", name: "Energy Drink", price: 1500, category: "Drinks", stock: 50},
+            {code: "102", name: "Bread", price: 2000, category: "Food", stock: 20}
+        ];
+        let salesHistory = JSON.parse(localStorage.getItem('myShopHistory')) || [];
+        let cart = [];
+        let currentFilter = 'All';
+        let scanner;
+
+        // --- SLIDING CART ---
+        function toggleCart() { document.getElementById('cart-section').classList.toggle('expanded'); }
+
+        // --- PAYMENT & RECEIPT ---
+        function openPaymentModal() {
+            if(cart.length === 0) return showAlert("Cart is empty");
+            const total = cart.reduce((a, b) => a + (b.price * b.qty), 0);
+            document.getElementById('pay-total').innerText = total.toLocaleString() + " Ks";
+            document.getElementById('cash-input').value = '';
+            document.getElementById('payment-modal').style.display = 'flex';
+            setTimeout(() => document.getElementById('cash-input').focus(), 100);
+        }
+
+        function fillCash(amount) {
+            const input = document.getElementById('cash-input');
+            let current = parseInt(input.value) || 0;
+            input.value = current + amount;
+        }
+
+        function processPayment() {
+            try {
+                const total = cart.reduce((a, b) => a + (b.price * b.qty), 0);
+                const cash = parseFloat(document.getElementById('cash-input').value);
+                
+                if(!cash || cash < total) { alert("Not enough cash!"); return; }
+
+                document.getElementById('payment-modal').style.display = 'none';
+
+                // Stock & Save
+                cart.forEach(item => {
+                    let p = products.find(prod => prod.code === item.code);
+                    if(p) p.stock -= item.qty;
+                });
+                localStorage.setItem('myShopProducts', JSON.stringify(products));
+
+                const change = cash - total;
+                const now = new Date();
+                const dateStr = now.toLocaleDateString() + ' ' + now.toLocaleTimeString();
+
+                let itemStr = cart.map(i => `${i.qty}x ${i.name} (${(i.price*i.qty).toLocaleString()})`).join(", ");
+                salesHistory.unshift({ id: Date.now(), date: dateStr, total: total, items: itemStr });
+                localStorage.setItem('myShopHistory', JSON.stringify(salesHistory));
+
+                renderDashboard(); renderPOS(); renderInventory(); renderHistory(); 
+                
+                // Show Receipt
+                document.getElementById('r-total').innerText = total.toLocaleString() + " Ks";
+                document.getElementById('r-cash').innerText = cash.toLocaleString() + " Ks";
+                document.getElementById('r-change').innerText = change.toLocaleString();
+                document.getElementById('receipt-modal').style.display = 'flex';
+
+                cart = []; updateCartUI();
+                autoSyncUpload();
+            } catch (error) {
+                console.error(error);
+                showAlert("Error processing payment: " + error.message);
+            }
+        }
+
+        // --- PARTIAL REFUND ---
+        function openRefundModal(saleId) {
+            const sale = salesHistory.find(s => s.id === saleId);
+            if (!sale) return;
+            const list = document.getElementById('refund-list');
+            list.innerHTML = '';
+            
+            let parts = sale.items.split(", ");
+            parts.forEach(p => {
+                let [qtyStr, ...rest] = p.split("x ");
+                let restStr = rest.join("x ");
+                let name = restStr.replace(/\s\([^)]+\)$/, ""); 
+                let qty = parseInt(qtyStr);
+
+                list.innerHTML += `
+                    <div class="refund-item">
+                        <div><strong>${name}</strong><br><small>Qty: ${qty}</small></div>
+                        <button class="refund-qty-btn" onclick="returnItem(${saleId}, '${name.replace(/'/g, "\\'")}')">Return 1</button>
+                    </div>`;
+            });
+            document.getElementById('refund-modal').style.display = 'flex';
+        }
+
+        function closeRefundModal(e) {
+            if (e.target.id === 'refund-modal') document.getElementById('refund-modal').style.display = 'none';
+        }
+
+        function returnItem(saleId, itemName) {
+            const saleIndex = salesHistory.findIndex(s => s.id === saleId);
+            if (saleIndex === -1) return;
+            const sale = salesHistory[saleIndex];
+
+            let product = products.find(p => p.name === itemName);
+            let itemPrice = 0;
+            if (product) { product.stock++; itemPrice = product.price; }
+
+            let parts = sale.items.split(", ");
+            let newParts = [];
+            let itemFound = false;
+
+            parts.forEach(p => {
+                let [qtyStr, ...rest] = p.split("x ");
+                let restStr = rest.join("x ");
+                let currentName = restStr.replace(/\s\([^)]+\)$/, "");
+                let qty = parseInt(qtyStr);
+
+                if (currentName === itemName && !itemFound) {
+                    if (qty > 1) {
+                        let newTotal = (qty - 1) * itemPrice;
+                        newParts.push(`${qty - 1}x ${currentName} (${newTotal.toLocaleString()} Ks)`);
+                    }
+                    itemFound = true;
+                } else {
+                    newParts.push(p);
+                }
+            });
+
+            if (newParts.length === 0) {
+                salesHistory.splice(saleIndex, 1);
+                document.getElementById('refund-modal').style.display = 'none';
+                showAlert("Order fully refunded.");
+            } else {
+                sale.items = newParts.join(", ");
+                sale.total -= itemPrice;
+                if(sale.total < 0) sale.total = 0;
+                openRefundModal(saleId);
+            }
+
+            localStorage.setItem('myShopProducts', JSON.stringify(products));
+            localStorage.setItem('myShopHistory', JSON.stringify(salesHistory));
+            renderDashboard(); renderPOS(); renderInventory(); renderHistory(); autoSyncUpload();
+        }
+
+        // --- JPG EXPORT ---
+        function saveReceiptImage(id) {
+            const sale = salesHistory.find(s => s.id === id);
+            if (!sale) return;
+            document.getElementById('r-exp-date').innerText = sale.date;
+            document.getElementById('r-exp-id').innerText = "#" + sale.id.toString().slice(-6);
+            document.getElementById('r-exp-total').innerText = sale.total.toLocaleString() + " Ks";
+            
+            let itemsHtml = "";
+            sale.items.split(", ").forEach(p => { itemsHtml += `<div style="display:flex; justify-content:space-between; margin-bottom:5px;"><span>${p}</span></div>`; });
+            document.getElementById('r-exp-items').innerHTML = itemsHtml;
+
+            const element = document.getElementById('receipt-export');
+            element.style.left = "0"; // Show temporarily
+            element.style.top = "0"; 
+            element.style.zIndex = "9999";
+
+            html2canvas(element).then(canvas => {
+                const link = document.createElement('a');
+                link.download = `receipt_${sale.id}.jpg`;
+                link.href = canvas.toDataURL("image/jpeg");
+                link.click();
+                element.style.left = "-9999px"; // Hide again
+            });
+        }
+
+        // --- QTY CHANGE LOGIC ---
+        function changeCartQty(index, change) {
+            const item = cart[index];
+            const product = products.find(p => p.code === item.code);
+            
+            if (change === 1) {
+                if (product && item.qty + 1 > product.stock) {
+                    return showAlert("Not enough stock available!");
+                }
+                item.qty++;
+            } else {
+                if (item.qty > 1) {
+                    item.qty--;
+                } else {
+                    showConfirm("Remove " + item.name + "?", () => {
+                        cart.splice(index, 1);
+                        updateCartUI();
+                    });
+                    return;
+                }
+            }
+            updateCartUI();
+        }
+
+        // --- STANDARD FUNCTIONS ---
+        function addToCart(code) {
+            const p = products.find(i => i.code === code);
+            if(p) {
+                if(p.stock <= 0) return showAlert("Out of Stock");
+                let item = cart.find(i => i.code === code);
+                let currentQty = item ? item.qty : 0;
+                if(currentQty + 1 > p.stock) return showAlert("Not enough stock");
+
+                if(item) item.qty++; else cart.push({...p, qty: 1});
+                updateCartUI();
+                document.getElementById('scan-choice-modal').style.display='none';
+                document.getElementById('modal-input').value = '';
+            } else {
+                showConfirm("Item not found. Add?", () => {
+                    document.getElementById('scan-choice-modal').style.display='none';
+                    document.getElementById('modal-input').value = '';
+                    showScreen('inventory');
+                    document.getElementById('new-code').value = code;
+                });
+            }
+        }
+
+        function updateCartUI() {
+            const list = document.getElementById('cart-items');
+            list.innerHTML = '';
+            let total = 0;
+            cart.forEach((item, idx) => {
+                total += item.price * item.qty;
+                list.innerHTML += `<div class="cart-item">
+                    <div style="flex:1;">
+                        <div class="cart-item-name">${item.name}</div>
+                        <div style="font-size:12px; color:#636e72;">${item.price.toLocaleString()} Ks</div>
+                    </div>
+                    
+                    <div style="display:flex; align-items:center; gap:8px; margin-right:10px;">
+                        <button onclick="changeCartQty(${idx}, -1)" style="width:28px; height:28px; border-radius:50%; border:1px solid #dfe6e9; background:white; color:#2d3436; font-weight:bold;">-</button>
+                        <span style="font-weight:700; font-size:14px; min-width:20px; text-align:center;">${item.qty}</span>
+                        <button onclick="changeCartQty(${idx}, 1)" style="width:28px; height:28px; border-radius:50%; border:none; background:var(--primary); color:white; font-weight:bold;">+</button>
+                    </div>
+
+                    <div style="font-weight:700; color:var(--dark); min-width:60px; text-align:right;">${(item.price*item.qty).toLocaleString()}</div>
+                    <div class="cart-item-remove" onclick="removeFromCart(${idx})" style="margin-left:10px; font-size:18px;">✕</div>
+                </div>`;
+            });
+            document.getElementById('total-display').innerText = total.toLocaleString() + " Ks";
+        }
+        function removeFromCart(index) { cart.splice(index, 1); updateCartUI(); }
+        function clearCartVerify() { if(cart.length>0) showConfirm("Clear cart?", function(){ cart=[]; updateCartUI(); }); }
+
+        function renderPOS() {
+            const list = document.getElementById('product-list');
+            list.innerHTML = '';
+            products.filter(p => currentFilter==='All' || p.category===currentFilter).forEach(p => {
+                let stockClass = p.stock<=0 ? 'out-of-stock' : '';
+                list.innerHTML += `<div class="product-btn ${stockClass}" onclick="addToCart('${p.code}')">
+                    <div class="product-name">${p.name}</div>
+                    <div class="product-price">${p.price.toLocaleString()}</div>
+                    <div class="stock-badge">Stock: ${p.stock}</div>
+                </div>`;
+            });
+        }
+
+        function renderCategories() {
+            const cats = ['All', ...new Set(products.map(p => p.category || 'General'))];
+            document.getElementById('category-bar').innerHTML = cats.map(c => 
+                `<button class="cat-chip ${c===currentFilter?'active':''}" onclick="currentFilter='${c}';renderCategories();renderPOS()">${c}</button>`
+            ).join('');
+        }
+
+        function renderInventory() {
+            const list = document.getElementById('inventory-list');
+            list.innerHTML = products.map((p,i) => `
+                <div class="list-card">
+                    <div><strong>${p.name}</strong><br><small>${p.category}</small></div>
+                    <div style="text-align:right">
+                        ${p.price}<br>Stock: ${p.stock}
+                        <div style="margin-top:5px;">
+                            <button onclick="editProduct(${i})" class="action-btn" style="background:#dfe6e9;">✏️</button>
+                            <button onclick="deleteProduct(${i})" class="action-btn" style="background:#ff7675; color:white;">🗑️</button>
+                        </div>
+                    </div>
+                </div>`).join('');
+        }
+
+        function renderHistory() {
+            const list = document.getElementById('history-list');
+            list.innerHTML = '';
+            let groups = {};
+            salesHistory.forEach(s => {
+                let dateStr = String(s.date);
+                let d = dateStr.includes(' ') ? dateStr.split(' ')[0] : dateStr;
+                if(!groups[d]) groups[d]=[]; groups[d].push(s);
+            });
+            
+            for(let d in groups) {
+                list.innerHTML += `<div class="date-header">${d}</div>` + groups[d].map(s => `
+                    <div class="list-card">
+                        <div><strong>${s.total.toLocaleString()} Ks</strong><br><small>${s.date.split(' ')[1] || ''}</small><div style="font-size:12px;color:#666">${s.items}</div></div>
+                        <div style="display:flex; flex-direction:column; gap:5px;">
+                            <button onclick="saveReceiptImage(${s.id})" class="action-btn" style="background:var(--primary);color:white;">JPG</button>
+                            <button onclick="openRefundModal(${s.id})" class="action-btn" style="background:#ff7675;color:white;">Refund</button>
+                        </div>
+                    </div>`).join('');
+            }
+        }
+
+        function renderDashboard() {
+            let totalSales = 0;
+            salesHistory.forEach(s => totalSales += s.total);
+            document.getElementById('dash-sales').innerText = totalSales.toLocaleString() + " Ks";
+            document.getElementById('dash-orders').innerText = salesHistory.length;
+        }
+
+        // --- HELPERS ---
+        function editProduct(i) {
+            const p = products[i];
+            document.getElementById('new-name').value = p.name;
+            document.getElementById('new-price').value = p.price;
+            document.getElementById('new-stock').value = p.stock;
+            document.getElementById('new-code').value = p.code;
+            document.getElementById('edit-index').value = i;
+            showScreen('inventory');
+        }
+        function deleteProduct(i) { showConfirm("Delete?", () => { products.splice(i,1); saveLocal(); renderInventory(); renderPOS(); }); }
+        function saveProduct() {
+            const name = document.getElementById('new-name').value;
+            const price = parseInt(document.getElementById('new-price').value);
+            const stock = parseInt(document.getElementById('new-stock').value);
+            const code = document.getElementById('new-code').value;
+            const cat = document.getElementById('new-category').value; 
+            const idx = parseInt(document.getElementById('edit-index').value);
+            if(!name || !price || !code) return showAlert("Missing fields");
+            
+            const obj = {name, price, stock, code, category: cat};
+            if(idx === -1) products.push(obj); else products[idx] = obj;
+            
+            saveLocal(); resetForm(); showAlert("Saved"); renderInventory(); renderPOS();
+        }
+        function resetForm() { document.getElementById('new-name').value=''; document.getElementById('new-price').value=''; document.getElementById('new-stock').value=''; document.getElementById('new-code').value=''; document.getElementById('edit-index').value='-1'; }
+        function saveLocal() { localStorage.setItem('myShopProducts', JSON.stringify(products)); autoSyncUpload(); }
+        function showScreen(id) {
+            document.querySelectorAll('.screen').forEach(s => s.classList.remove('active-screen'));
+            document.getElementById(id+'-screen').classList.add('active-screen');
+            document.querySelectorAll('.navbar button').forEach(b => b.classList.remove('active'));
+            document.getElementById('btn-'+(id==='dashboard'?'dash':id==='inventory'?'inv':id==='history'?'hist':'pos')).classList.add('active');
+            if(id==='dashboard') renderDashboard(); if(id==='history') renderHistory();
+        }
+        
+        // --- SYNC ---
+        function updateSync(s) {
+            const t = document.getElementById('sync-text');
+            document.getElementById('sync-status').className = s;
+            t.innerText = s==='syncing'?'Syncing...':s==='synced'?'Synced':'Error';
+        }
+        async function autoSyncUpload() {
+            if(SCRIPT_URL.includes("YOUR")) return;
+            updateSync('syncing');
+            try { await fetch(SCRIPT_URL, {method:'POST', mode:'no-cors', headers:{'Content-Type':'application/json'}, body:JSON.stringify({products, history:salesHistory})}); updateSync('synced'); }
+            catch { updateSync('error'); }
+        }
+        async function autoSyncDownload(force) {
+            if(SCRIPT_URL.includes("YOUR")) return;
+            if(force) updateSync('syncing');
+            try {
+                let res = await fetch(SCRIPT_URL); let data = await res.json();
+                if(data.products) { products = data.products; localStorage.setItem('myShopProducts', JSON.stringify(products)); }
+                if(data.history) { salesHistory = data.history; localStorage.setItem('myShopHistory', JSON.stringify(salesHistory)); }
+                renderDashboard(); renderPOS(); renderInventory(); renderHistory(); updateSync('synced');
+            } catch { if(force) updateSync('error'); }
+        }
+        setInterval(autoSyncDownload, SYNC_INTERVAL);
+
+        // --- SCANNER ---
+        function openScanModal() { document.getElementById('scan-choice-modal').style.display='flex'; setTimeout(()=>document.getElementById('modal-input').focus(),100); }
+        function closeModal(e) { if(e.target.id.includes('modal')) e.target.style.display='none'; }
+        function handleManualInput() { addToCart(document.getElementById('modal-input').value); }
+        function startScanner(t) { document.getElementById('scan-choice-modal').style.display='none'; document.getElementById('scanner-container').style.display='block'; scanner=new Html5Qrcode("reader"); scanner.start({facingMode:"environment"},{fps:10},d=>{stopScanner();if(t==='new-code')document.getElementById('new-code').value=d;else addToCart(d);}); }
+        function stopScanner() { if(scanner) scanner.stop().then(()=>{document.getElementById('scanner-container').style.display='none';}); }
+        function closeReceipt() { document.getElementById('receipt-modal').style.display='none'; }
+        function showAlert(m) { document.getElementById('alert-message').innerText=m; document.getElementById('custom-alert').style.display='flex'; }
+        function closeAlert() { document.getElementById('custom-alert').style.display='none'; }
+        function showConfirm(m, f) { document.getElementById('confirm-message').innerText=m; document.getElementById('custom-confirm').style.display='flex'; document.getElementById('confirm-yes-btn').onclick=()=>{f();closeConfirm()}; }
+        function closeConfirm() { document.getElementById('custom-confirm').style.display='none'; }
+
+        // INIT
+        renderCategories(); renderPOS(); renderInventory(); renderHistory(); autoSyncDownload();
+    </script>
+</body>
+</html>
