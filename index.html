@@ -3,13 +3,12 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Myanmar POS Pro v84 (Scanner Fixed)</title>
+    <title>Myanmar POS Pro v85</title>
     
     <link rel="manifest" href="manifest.json">
     <meta name="theme-color" content="#ffffff">
     
-    <!-- Updated Scanner Library -->
-    <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+    <script src="https://unpkg.com/html5-qrcode" type="text/javascript"></script>
     <script src="https://html2canvas.hertzen.com/dist/html2canvas.min.js"></script>
     
     <style>
@@ -561,9 +560,7 @@
                             if (nameParts.length > 0) {
                                 let name = nameParts[0];
                                 let qty = parseInt(parts[0]);
-                                if (!isNaN(qty)) {
-                                    salesCount[name] = (salesCount[name] || 0) + qty;
-                                }
+                                if(!isNaN(qty)) salesCount[name] = (salesCount[name] || 0) + qty;
                             }
                         }
                     });
@@ -1009,16 +1006,68 @@
         function removeFromCart(index) { cart.splice(index, 1); updateCartUI(); }
         function clearCartVerify() { if(cart.length>0) showConfirm("Clear cart?", function(){ cart=[]; updateCartUI(); }); }
         function changeCartQty(index, change) { const item = cart[index]; const product = products.find(p => p.code === item.code); if (change === 1) { if (product && item.qty + 1 > product.stock) { return showAlert("No Stock!"); } item.qty++; } else { if (item.qty > 1) { item.qty--; } else { showConfirm("Remove?", () => { cart.splice(index, 1); updateCartUI(); }); return; } } updateCartUI(); }
-        function addToCart(code) { const p = products.find(i => i.code === code); if(p) { if(p.stock <= 0) return showAlert("Out of Stock"); let item = cart.find(i => i.code === code); if(item && item.qty + 1 > p.stock) return showAlert("No Stock"); if(item) item.qty++; else cart.push({...p, qty: 1}); updateCartUI(); document.getElementById('scan-choice-modal').style.display='none'; document.getElementById('modal-input').value = ''; } else { showConfirm("Add Item?", () => { document.getElementById('scan-choice-modal').style.display='none'; document.getElementById('modal-input').value = ''; document.getElementById('new-code').value = code; openProductModal(); }); } }
-        function updateSync(s) { const c = document.getElementById('sync-status'); if(c) c.className = s; }
+        function addToCart(code) { const p = products.find(i => i.code === code); if(p) { if(p.stock <= 0) return showAlert("Out of Stock"); let item = cart.find(i => i.code === code); if(item && item.qty + 1 > p.stock) return showAlert("No Stock"); if(item) item.qty++; else cart.push({...p, qty: 1}); updateCartUI(); document.getElementById('scan-choice-modal').style.display='none'; document.getElementById('modal-input').value = ''; } else { showConfirm("Add Item?", () => { 
+            // FIXED: Open modal with PRE-FILLED barcode
+            document.getElementById('scan-choice-modal').style.display='none'; 
+            openProductModal();
+            // We need a small delay to ensure modal is open before setting value
+            setTimeout(() => {
+                 document.getElementById('new-code').value = code;
+                 document.getElementById('new-name').focus(); // Focus name for quick entry
+            }, 100);
+        }); } }
+        
+        // FIXED SYNC UPDATE
+        function updateSync(s) { 
+            const container = document.getElementById('sync-status');
+            if(container) container.className = s;
+        }
+        
         async function autoSyncUpload() { if(SCRIPT_URL.includes("YOUR")) return; updateSync('syncing'); try { await fetch(SCRIPT_URL, {method:'POST', mode:'no-cors', headers:{'Content-Type':'application/json'}, body:JSON.stringify({products, history:salesHistory})}); updateSync('synced'); } catch { updateSync('error'); } }
         async function autoSyncDownload(force) { if(SCRIPT_URL.includes("YOUR")) return; if(force) updateSync('syncing'); try { let res = await fetch(SCRIPT_URL); let data = await res.json(); if(data.products) { products = data.products; localStorage.setItem('myShopProducts', JSON.stringify(products)); } if(data.history) { salesHistory = data.history; localStorage.setItem('myShopHistory', JSON.stringify(salesHistory)); } renderDashboard(); renderPOS(); renderInventory(); renderHistory(); updateSync('synced'); } catch { if(force) updateSync('error'); } }
         setInterval(autoSyncDownload, SYNC_INTERVAL);
+        
         function openScanModal() { document.getElementById('scan-choice-modal').style.display='flex'; setTimeout(()=>document.getElementById('modal-input').focus(),100); }
         function closeModal(e) { if(e.target.id.includes('modal')) e.target.style.display='none'; }
         function handleManualInput() { addToCart(document.getElementById('modal-input').value); }
-        function startScanner(t) { document.getElementById('scan-choice-modal').style.display='none'; document.getElementById('product-modal').style.display='none'; document.getElementById('scanner-container').style.display='block'; scanner=new Html5Qrcode("reader"); scanner.start({facingMode:"environment"},{fps:10},d=>{stopScanner();if(t==='new-code'){document.getElementById('new-code').value=d; openProductModal();}else addToCart(d);}); }
-        function stopScanner() { if(scanner) scanner.stop().then(()=>{document.getElementById('scanner-container').style.display='none';}); }
+        
+        // FIXED SCANNER LOGIC
+        function startScanner(t) { 
+            // Hide other modals to show camera cleanly
+            document.getElementById('scan-choice-modal').style.display='none'; 
+            document.getElementById('product-modal').style.display='none'; 
+            document.getElementById('scanner-container').style.display='block'; 
+            
+            scanner = new Html5Qrcode("reader"); 
+            scanner.start({facingMode:"environment"}, {fps:10}, (d) => {
+                // SUCCESS CALLBACK
+                stopScanner().then(() => {
+                    if(t === 'new-code'){
+                        // If scanning inside New Item form, reopen modal and fill code
+                        openProductModal();
+                        setTimeout(() => document.getElementById('new-code').value = d, 100);
+                    } else {
+                        // Regular Sell Scan
+                        addToCart(d);
+                    }
+                });
+            }); 
+        }
+
+        function stopScanner() { 
+            if(scanner) {
+                return scanner.stop().then(() => {
+                    document.getElementById('scanner-container').style.display='none';
+                }).catch(err => {
+                    console.log("Stop failed: ", err);
+                    document.getElementById('scanner-container').style.display='none';
+                });
+            } else {
+                document.getElementById('scanner-container').style.display='none';
+                return Promise.resolve();
+            }
+        }
+        
         function closeReceipt() { document.getElementById('receipt-modal').style.display='none'; document.getElementById('cart-section').classList.remove('expanded'); }
         function showAlert(m) { document.getElementById('alert-message').innerText=m; document.getElementById('custom-alert').style.display='flex'; }
         function closeAlert() { document.getElementById('custom-alert').style.display='none'; }
