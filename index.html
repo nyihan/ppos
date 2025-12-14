@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Myanmar POS Pro v76</title>
+    <title>Myanmar POS Pro v82</title>
     
     <link rel="manifest" href="manifest.json">
     <meta name="theme-color" content="#ffffff">
@@ -58,7 +58,7 @@
         .screen { display: none; flex-direction: column; height: 100%; position: relative; overflow: hidden; }
         .active-screen { display: flex; }
 
-        /* --- POS SCREEN --- */
+        /* --- POS HEADER --- */
         .pos-header {
             flex-shrink: 0;
             padding: 10px 15px;
@@ -415,12 +415,13 @@
                 <input type="number" id="new-price" placeholder="Price" style="flex:2" oninput="autoCalcCost()">
                 <input type="number" id="new-stock" placeholder="Stock" style="flex:1">
             </div>
+            <!-- Discount & Cost -->
             <div style="display:flex; gap:10px; margin-top:10px;">
                  <input type="number" id="new-discount" placeholder="Disc %" style="flex:1" oninput="autoCalcCost()">
                  <input type="number" id="new-cost" placeholder="Buying Price (Cost)" style="flex:2">
             </div>
             
-            <!-- NEW WHOLESALE FIELDS -->
+            <!-- Wholesale Fields -->
             <div style="display:flex; gap:10px; margin-top:10px;">
                 <input type="number" id="new-pack-count" placeholder="Pack Qty (e.g. 12)" style="flex:1">
                 <input type="number" id="new-pack-price" placeholder="Pack Price" style="flex:1">
@@ -561,7 +562,9 @@
                             if (nameParts.length > 0) {
                                 let name = nameParts[0];
                                 let qty = parseInt(parts[0]);
-                                if(!isNaN(qty)) salesCount[name] = (salesCount[name] || 0) + qty;
+                                if (!isNaN(qty)) {
+                                    salesCount[name] = (salesCount[name] || 0) + qty;
+                                }
                             }
                         }
                     });
@@ -908,25 +911,32 @@
 
         function openProductModal(index = -1) { 
             document.getElementById('edit-index').value = index; 
+            
+            // Safe helper to set value
+            const setVal = (id, val) => {
+                const el = document.getElementById(id);
+                if(el) el.value = val;
+            };
+
             if(index >= 0) { 
                 const p = products[index]; 
-                document.getElementById('new-name').value = p.name; 
-                document.getElementById('new-price').value = p.price; 
-                document.getElementById('new-stock').value = p.stock; 
-                document.getElementById('new-code').value = p.code; 
-                document.getElementById('new-cost').value = p.cost || ''; // Load Cost
-                document.getElementById('new-discount').value = '';
-                document.getElementById('new-pack-count').value = p.packCount || '';
-                document.getElementById('new-pack-price').value = p.packPrice || '';
+                setVal('new-name', p.name); 
+                setVal('new-price', p.price); 
+                setVal('new-stock', p.stock); 
+                setVal('new-code', p.code); 
+                setVal('new-cost', p.cost || ''); 
+                setVal('new-discount', '');
+                setVal('new-pack-count', p.packCount || '');
+                setVal('new-pack-price', p.packPrice || '');
             } else { 
-                document.getElementById('new-name').value = ''; 
-                document.getElementById('new-price').value = ''; 
-                document.getElementById('new-stock').value = ''; 
-                document.getElementById('new-code').value = ''; 
-                document.getElementById('new-cost').value = ''; 
-                document.getElementById('new-discount').value = '';
-                document.getElementById('new-pack-count').value = '';
-                document.getElementById('new-pack-price').value = '';
+                setVal('new-name', ''); 
+                setVal('new-price', ''); 
+                setVal('new-stock', ''); 
+                setVal('new-code', ''); 
+                setVal('new-cost', ''); 
+                setVal('new-discount', '');
+                setVal('new-pack-count', '');
+                setVal('new-pack-price', '');
             } 
             document.getElementById('product-modal').style.display = 'flex'; 
         }
@@ -937,9 +947,12 @@
             const stock = parseInt(document.getElementById('new-stock').value); 
             const code = document.getElementById('new-code').value; 
             const cat = document.getElementById('new-category').value; 
-            const cost = parseInt(document.getElementById('new-cost').value) || 0; 
-            const packCount = parseInt(document.getElementById('new-pack-count').value) || 0;
-            const packPrice = parseInt(document.getElementById('new-pack-price').value) || 0;
+            
+            // Safe parsing for optional fields
+            const getInt = (id) => parseInt(document.getElementById(id)?.value) || 0;
+            const cost = getInt('new-cost'); 
+            const packCount = getInt('new-pack-count');
+            const packPrice = getInt('new-pack-price');
             const idx = parseInt(document.getElementById('edit-index').value); 
             
             if(!name || !price) return showAlert("Missing fields"); 
