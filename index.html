@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Myanmar POS Pro v75</title>
+    <title>Myanmar POS Pro v76</title>
     
     <link rel="manifest" href="manifest.json">
     <meta name="theme-color" content="#ffffff">
@@ -168,7 +168,7 @@
             box-shadow: 0 8px 20px rgba(30, 41, 59, 0.2); 
         }
 
-        /* --- INVENTORY & HISTORY --- */
+        /* --- INVENTORY --- */
         .inventory-list { flex: 1; overflow-y: auto; padding: 15px; padding-bottom: 120px; }
         .list-card { 
             background: white; padding: 15px; margin-bottom: 10px; border-radius: 16px; 
@@ -176,6 +176,7 @@
             display: flex; justify-content: space-between; align-items: center; 
         }
         
+        /* ADD ITEM FAB */
         .add-item-fab {
             position: fixed; bottom: 80px; right: 20px;
             width: 56px; height: 56px; border-radius: 18px;
@@ -185,6 +186,7 @@
             z-index: 100; cursor: pointer;
         }
 
+        /* --- HISTORY --- */
         .history-list { flex: 1; overflow-y: auto; padding: 15px; padding-bottom: 100px; }
         .date-header { 
             position: sticky; top: 0; 
@@ -417,6 +419,13 @@
                  <input type="number" id="new-discount" placeholder="Disc %" style="flex:1" oninput="autoCalcCost()">
                  <input type="number" id="new-cost" placeholder="Buying Price (Cost)" style="flex:2">
             </div>
+            
+            <!-- NEW WHOLESALE FIELDS -->
+            <div style="display:flex; gap:10px; margin-top:10px;">
+                <input type="number" id="new-pack-count" placeholder="Pack Qty (e.g. 12)" style="flex:1">
+                <input type="number" id="new-pack-price" placeholder="Pack Price" style="flex:1">
+            </div>
+
             <div style="display:flex; gap:10px; margin-top:10px;">
                 <input type="text" id="new-code" placeholder="Barcode" style="flex:2">
                 <button onclick="startScanner('new-code')" style="flex:1; background:#f1f5f9; border:none; border-radius:12px;">📷</button>
@@ -544,7 +553,6 @@
             // Calculate sales count for hot badge
             let salesCount = {};
             salesHistory.forEach(s => {
-                // Ensure s.items exists and is a string
                 if (s.items && typeof s.items === 'string') {
                     s.items.split(', ').forEach(item => {
                         let parts = item.split('x ');
@@ -553,9 +561,7 @@
                             if (nameParts.length > 0) {
                                 let name = nameParts[0];
                                 let qty = parseInt(parts[0]);
-                                if (!isNaN(qty)) {
-                                    salesCount[name] = (salesCount[name] || 0) + qty;
-                                }
+                                if(!isNaN(qty)) salesCount[name] = (salesCount[name] || 0) + qty;
                             }
                         }
                     });
@@ -712,11 +718,11 @@
 
         // --- CORE FUNCTIONS ---
         function toggleCart() { document.getElementById('cart-section').classList.toggle('expanded'); }
-        function openPaymentModal() { if(cart.length === 0) return showAlert("Empty"); document.getElementById('pay-total').innerText = cart.reduce((a, b) => a + (b.price * b.qty), 0).toLocaleString() + " Ks"; document.getElementById('cash-input').value = ''; document.getElementById('payment-modal').style.display = 'flex'; setTimeout(() => document.getElementById('cash-input').focus(), 100); }
+        function openPaymentModal() { if(cart.length === 0) return showAlert("Empty"); document.getElementById('pay-total').innerText = cart.reduce((a, b) => a + calculateItemTotal(b), 0).toLocaleString() + " Ks"; document.getElementById('cash-input').value = ''; document.getElementById('payment-modal').style.display = 'flex'; setTimeout(() => document.getElementById('cash-input').focus(), 100); }
         function fillCash(a) { const i = document.getElementById('cash-input'); i.value = (parseInt(i.value)||0) + a; }
         
         function processPayment() {
-            const total = cart.reduce((a, b) => a + (b.price * b.qty), 0);
+            const total = cart.reduce((a, b) => a + calculateItemTotal(b), 0);
             const cashInput = document.getElementById('cash-input').value;
             const cash = cashInput === '' ? 0 : parseFloat(cashInput);
 
@@ -750,7 +756,7 @@
             // Use consistent YYYY-MM-DD for date Key logic
             const now = new Date();
             const dateStr = now.toLocaleDateString('en-CA') + ' ' + now.toLocaleTimeString(); 
-            let itemStr = cart.map(i => `${i.qty}x ${i.name} (${(i.price*i.qty).toLocaleString()})`).join(", ");
+            let itemStr = cart.map(i => `${i.qty}x ${i.name} (${calculateItemTotal(i).toLocaleString()})`).join(", ");
             
             salesHistory.unshift({ id: Date.now(), date: dateStr, total: total, items: itemStr, paid: cash, debt: debt, status: status, customer: customer });
             localStorage.setItem('myShopHistory', JSON.stringify(salesHistory));
@@ -879,13 +885,14 @@
             list.innerHTML = products.map((p,i) => {
                 let profit = p.price - (p.cost || 0);
                 let profitText = p.cost ? `<span style="font-size:10px; color:#64748b;">(Buy: ${p.cost}, Profit: <b style="${profit >= 0 ? 'color:#10b981' : 'color:#ef4444'}">${profit}</b>)</span>` : '';
+                let packText = (p.packCount > 1 && p.packPrice > 0) ? `<br><span style="font-size:10px; color:#6366f1;">1 Pack = ${p.packCount} @ ${p.packPrice}</span>` : '';
 
                 return `
                 <div class="list-card">
                     <div>
                         <strong>${p.name}</strong><br>
                         <small>${p.category || 'General'}</small><br>
-                        ${profitText}
+                        ${profitText}${packText}
                     </div>
                     <div style="text-align:right">
                         ${p.price.toLocaleString()} Ks<br>
@@ -908,12 +915,18 @@
                 document.getElementById('new-stock').value = p.stock; 
                 document.getElementById('new-code').value = p.code; 
                 document.getElementById('new-cost').value = p.cost || ''; // Load Cost
+                document.getElementById('new-discount').value = '';
+                document.getElementById('new-pack-count').value = p.packCount || '';
+                document.getElementById('new-pack-price').value = p.packPrice || '';
             } else { 
                 document.getElementById('new-name').value = ''; 
                 document.getElementById('new-price').value = ''; 
                 document.getElementById('new-stock').value = ''; 
                 document.getElementById('new-code').value = ''; 
-                document.getElementById('new-cost').value = ''; // Reset Cost
+                document.getElementById('new-cost').value = ''; 
+                document.getElementById('new-discount').value = '';
+                document.getElementById('new-pack-count').value = '';
+                document.getElementById('new-pack-price').value = '';
             } 
             document.getElementById('product-modal').style.display = 'flex'; 
         }
@@ -925,11 +938,13 @@
             const code = document.getElementById('new-code').value; 
             const cat = document.getElementById('new-category').value; 
             const cost = parseInt(document.getElementById('new-cost').value) || 0; 
+            const packCount = parseInt(document.getElementById('new-pack-count').value) || 0;
+            const packPrice = parseInt(document.getElementById('new-pack-price').value) || 0;
             const idx = parseInt(document.getElementById('edit-index').value); 
             
             if(!name || !price) return showAlert("Missing fields"); 
             
-            const obj = {name, price, stock, code, category: cat, cost: cost}; 
+            const obj = {name, price, stock, code, category: cat, cost: cost, packCount: packCount, packPrice: packPrice}; 
             
             if(idx === -1) products.push(obj); else products[idx] = obj; 
             
@@ -941,7 +956,44 @@
 
         function deleteProduct(i) { showConfirm("Delete?", () => { products.splice(i,1); localStorage.setItem('myShopProducts', JSON.stringify(products)); renderInventory(); renderPOS(); autoSyncUpload(); }); }
         
-        function updateCartUI() { const list = document.getElementById('cart-items'); list.innerHTML = ''; let total = 0; cart.forEach((item, idx) => { total += item.price * item.qty; list.innerHTML += `<div class="cart-item"><div style="flex:1;"><div class="cart-item-name">${item.name}</div><div style="font-size:12px; color:#636e72;">${item.price.toLocaleString()} Ks</div></div><div style="display:flex; align-items:center; gap:8px; margin-right:10px;"><button onclick="changeCartQty(${idx}, -1)" style="width:28px; height:28px; border-radius:50%; border:1px solid #dfe6e9; background:white; color:#2d3436; font-weight:bold;">-</button><span style="font-weight:700; font-size:14px; min-width:20px; text-align:center;">${item.qty}</span><button onclick="changeCartQty(${idx}, 1)" style="width:28px; height:28px; border-radius:50%; border:none; background:var(--primary); color:white; font-weight:bold;">+</button></div><div style="font-weight:700; color:var(--dark); min-width:60px; text-align:right;">${(item.price*item.qty).toLocaleString()}</div><div class="cart-item-remove" onclick="removeFromCart(${idx})" style="margin-left:10px; font-size:18px;">✕</div></div>`; }); document.getElementById('total-display').innerText = total.toLocaleString() + " Ks"; document.getElementById('mini-cart-total').innerText = total.toLocaleString() + " Ks"; }
+        // --- UPDATED CART LOGIC (WHOLESALE) ---
+        function calculateItemTotal(item) {
+            const product = products.find(p => p.code === item.code);
+            if (!product) return 0;
+            
+            let total = 0;
+            if (product.packCount > 1 && product.packPrice > 0 && item.qty >= product.packCount) {
+                const packs = Math.floor(item.qty / product.packCount);
+                const loose = item.qty % product.packCount;
+                total = (packs * product.packPrice) + (loose * product.price);
+            } else {
+                total = item.qty * product.price;
+            }
+            return total;
+        }
+
+        function updateCartUI() { 
+            const list = document.getElementById('cart-items'); 
+            list.innerHTML = ''; 
+            let total = 0; 
+            cart.forEach((item, idx) => { 
+                const itemTotal = calculateItemTotal(item);
+                total += itemTotal; 
+                
+                // Wholesale indicator text
+                let wholesaleInfo = "";
+                const product = products.find(p => p.code === item.code);
+                if (product && product.packCount > 1 && product.packPrice > 0 && item.qty >= product.packCount) {
+                     const packs = Math.floor(item.qty / product.packCount);
+                     wholesaleInfo = `<br><span style="font-size:10px; color:#6366f1;">(${packs} Packs Applied)</span>`;
+                }
+
+                list.innerHTML += `<div class="cart-item"><div style="flex:1;"><div class="cart-item-name">${item.name}${wholesaleInfo}</div><div style="font-size:12px; color:#636e72;">${item.price.toLocaleString()} Ks</div></div><div style="display:flex; align-items:center; gap:8px; margin-right:10px;"><button onclick="changeCartQty(${idx}, -1)" style="width:28px; height:28px; border-radius:50%; border:1px solid #dfe6e9; background:white; color:#2d3436; font-weight:bold;">-</button><span style="font-weight:700; font-size:14px; min-width:20px; text-align:center;">${item.qty}</span><button onclick="changeCartQty(${idx}, 1)" style="width:28px; height:28px; border-radius:50%; border:none; background:var(--primary); color:white; font-weight:bold;">+</button></div><div style="font-weight:700; color:var(--dark); min-width:60px; text-align:right;">${itemTotal.toLocaleString()}</div><div class="cart-item-remove" onclick="removeFromCart(${idx})" style="margin-left:10px; font-size:18px;">✕</div></div>`; 
+            }); 
+            document.getElementById('total-display').innerText = total.toLocaleString() + " Ks"; 
+            document.getElementById('mini-cart-total').innerText = total.toLocaleString() + " Ks"; 
+        }
+
         function removeFromCart(index) { cart.splice(index, 1); updateCartUI(); }
         function clearCartVerify() { if(cart.length>0) showConfirm("Clear cart?", function(){ cart=[]; updateCartUI(); }); }
         function changeCartQty(index, change) { const item = cart[index]; const product = products.find(p => p.code === item.code); if (change === 1) { if (product && item.qty + 1 > product.stock) { return showAlert("No Stock!"); } item.qty++; } else { if (item.qty > 1) { item.qty--; } else { showConfirm("Remove?", () => { cart.splice(index, 1); updateCartUI(); }); return; } } updateCartUI(); }
