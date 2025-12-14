@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Myanmar POS Pro v64</title>
+    <title>Myanmar POS Pro v71</title>
     
     <link rel="manifest" href="manifest.json">
     <meta name="theme-color" content="#ffffff">
@@ -168,7 +168,7 @@
             box-shadow: 0 8px 20px rgba(30, 41, 59, 0.2); 
         }
 
-        /* --- INVENTORY --- */
+        /* --- INVENTORY & HISTORY --- */
         .inventory-list { flex: 1; overflow-y: auto; padding: 15px; padding-bottom: 120px; }
         .list-card { 
             background: white; padding: 15px; margin-bottom: 10px; border-radius: 16px; 
@@ -176,7 +176,6 @@
             display: flex; justify-content: space-between; align-items: center; 
         }
         
-        /* ADD ITEM FAB */
         .add-item-fab {
             position: fixed; bottom: 80px; right: 20px;
             width: 56px; height: 56px; border-radius: 18px;
@@ -186,7 +185,6 @@
             z-index: 100; cursor: pointer;
         }
 
-        /* --- HISTORY --- */
         .history-list { flex: 1; overflow-y: auto; padding: 15px; padding-bottom: 100px; }
         .date-header { 
             position: sticky; top: 0; 
@@ -295,7 +293,8 @@
 
         <div class="product-area"><div id="product-list" class="product-grid"></div></div>
         
-        <div class="glass-fab" onclick="openScanModal()">
+        <!-- FAB - Direct Scan -->
+        <div class="glass-fab" onclick="startScanner('cart')">
             <svg class="icon" viewBox="0 0 24 24"><path d="M3 7V5a2 2 0 0 1 2-2h2"/><path d="M17 3h2a2 2 0 0 1 2 2v2"/><path d="M21 17v2a2 2 0 0 1-2 2h-2"/><path d="M7 21H5a2 2 0 0 1-2-2v-2"/><rect x="7" y="7" width="10" height="10" rx="2"/></svg>
         </div>
 
@@ -487,7 +486,7 @@
         <button onclick="showScreen('pos')" id="btn-pos"><svg class="icon" viewBox="0 0 24 24"><path d="M6 2L3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"/><line x1="3" y1="6" x2="21" y2="6"/><path d="M16 10a4 4 0 0 1-8 0"/></svg><span>Sell</span></button>
         <button onclick="showScreen('inventory')" id="btn-inv"><svg class="icon" viewBox="0 0 24 24"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/></svg><span>Items</span></button>
         <button onclick="showScreen('history')" id="btn-hist"><svg class="icon" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg><span>History</span></button>
-        <button onclick="showScreen('settings')" id="btn-set"><svg class="icon" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg><span>Settings</span></button>
+        <button onclick="showScreen('settings')" id="btn-set"><svg class="icon" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 0 2.83l.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg><span>Settings</span></button>
     </div>
 
     <script>
@@ -546,7 +545,6 @@
             // Calculate sales count for hot badge
             let salesCount = {};
             salesHistory.forEach(s => {
-                // Ensure s.items exists and is a string
                 if (s.items && typeof s.items === 'string') {
                     s.items.split(', ').forEach(item => {
                         let parts = item.split('x ');
@@ -664,7 +662,6 @@
                 } else {
                     let counts = {};
                     todaysSales.forEach(s => {
-                        // Safe check for items string
                         if (s.items && typeof s.items === 'string') {
                             s.items.split(', ').forEach(i => {
                                 let parts = i.split('x ');
@@ -740,6 +737,7 @@
         function confirmDebt() {
             const customer = document.getElementById('debt-customer').value;
             if(!customer) return alert("Name Required");
+            
             document.getElementById('debt-modal').style.display = 'none';
             completeSale(tempDebtSale.total, tempDebtSale.cash, tempDebtSale.debt, 'Unpaid', customer);
         }
@@ -905,7 +903,25 @@
         function saveReceiptImage(id) { const sale = salesHistory.find(s => s.id === id); if (!sale) return; document.getElementById('r-exp-date').innerText = sale.date; document.getElementById('r-exp-id').innerText = "#" + sale.id.toString().slice(-6); document.getElementById('r-exp-total').innerText = sale.total.toLocaleString() + " Ks"; let itemsHtml = ""; sale.items.split(", ").forEach(p => { itemsHtml += `<div style="display:flex; justify-content:space-between; margin-bottom:5px;"><span>${p}</span></div>`; }); document.getElementById('r-exp-items').innerHTML = itemsHtml; const element = document.getElementById('receipt-export'); element.style.left = "0"; element.style.top = "0"; element.style.zIndex = "9999"; html2canvas(element).then(canvas => { const link = document.createElement('a'); link.download = `receipt_${sale.id}.jpg`; link.href = canvas.toDataURL("image/jpeg"); link.click(); element.style.left = "-9999px"; }); }
         function showScreen(id) { document.querySelectorAll('.screen').forEach(s => s.classList.remove('active-screen')); document.getElementById(id+'-screen').classList.add('active-screen'); document.querySelectorAll('.navbar button').forEach(b => b.classList.remove('active')); let btnId = id === 'dashboard' ? 'dash' : id === 'inventory' ? 'inv' : id === 'history' ? 'hist' : id === 'settings' ? 'set' : 'pos'; document.getElementById('btn-' + btnId).classList.add('active'); if(id==='dashboard') renderDashboard(); if(id==='history') renderHistory(); if(id==='settings') loadSettings(); }
 
-        // --- NEW: UPDATED RENDER POS (SORTED BY SALES) ---
+        function openRefundModal(saleId) {
+            const sale = salesHistory.find(s => s.id === saleId);
+            if (!sale) return;
+            const list = document.getElementById('refund-list');
+            list.innerHTML = '';
+            let parts = sale.items.split(", ");
+            parts.forEach(p => {
+                let [qtyStr, ...rest] = p.split("x ");
+                let restStr = rest.join("x ");
+                let name = restStr.replace(/\s\([^)]+\)$/, ""); 
+                let qty = parseInt(qtyStr);
+                const safeName = name.replace(/'/g, "\\\\'"); 
+                list.innerHTML += `<div class="refund-item"><div><strong>${name}</strong><br><small>Qty: ${qty}</small></div><button class="refund-qty-btn" onclick="returnItem(${saleId}, '${safeName}')">Return 1</button></div>`;
+            });
+            document.getElementById('refund-modal').style.display = 'flex';
+        }
+        function closeRefundModal(e) { if (e.target.id === 'refund-modal') document.getElementById('refund-modal').style.display = 'none'; }
+        function returnItem(saleId, itemName) { /* ... Same Refund Logic ... */ const saleIndex = salesHistory.findIndex(s => s.id === saleId); if (saleIndex === -1) return; const sale = salesHistory[saleIndex]; let product = products.find(p => p.name === itemName); let itemPrice = 0; if (product) { product.stock++; itemPrice = product.price; } let parts = sale.items.split(", "); let newParts = []; let itemFound = false; parts.forEach(p => { let [qtyStr, ...rest] = p.split("x "); let restStr = rest.join("x "); let currentName = restStr.replace(/\s\([^)]+\)$/, ""); let qty = parseInt(qtyStr); if (currentName === itemName && !itemFound) { if (qty > 1) { let newTotal = (qty - 1) * itemPrice; newParts.push(`${qty - 1}x ${currentName} (${newTotal.toLocaleString()} Ks)`); } itemFound = true; } else { newParts.push(p); } }); if (newParts.length === 0) { salesHistory.splice(saleIndex, 1); document.getElementById('refund-modal').style.display = 'none'; showAlert("Order fully refunded."); } else { sale.items = newParts.join(", "); sale.total -= itemPrice; if(sale.total < 0) sale.total = 0; openRefundModal(saleId); } localStorage.setItem('myShopProducts', JSON.stringify(products)); localStorage.setItem('myShopHistory', JSON.stringify(salesHistory)); renderDashboard(); renderPOS(); renderInventory(); renderHistory(); autoSyncUpload(); }
+
         function renderCategories() {
             const cats = ['All', ...new Set(products.map(p => p.category || 'General'))];
             document.getElementById('category-bar').innerHTML = cats.map(c => `<button class="cat-chip ${c===currentFilter?'active':''}" onclick="currentFilter='${c}';renderCategories();renderPOS()">${c}</button>`).join('');
@@ -953,74 +969,6 @@
                     <div class="stock-badge">Stock: ${p.stock}</div>
                 </div>`;
             });
-        }
-        
-        // --- REFUND MODAL LOGIC (FIXED) ---
-        function openRefundModal(saleId) {
-            const sale = salesHistory.find(s => s.id === saleId);
-            if (!sale) return;
-            const list = document.getElementById('refund-list');
-            list.innerHTML = '';
-            let parts = sale.items.split(", ");
-            parts.forEach(p => {
-                let [qtyStr, ...rest] = p.split("x ");
-                let restStr = rest.join("x ");
-                let name = restStr.replace(/\s\([^)]+\)$/, ""); 
-                let qty = parseInt(qtyStr);
-                // SAFE ESCAPING
-                const safeName = name.replace(/'/g, "\\'"); 
-                list.innerHTML += `<div class="refund-item"><div><strong>${name}</strong><br><small>Qty: ${qty}</small></div><button class="refund-qty-btn" onclick="returnItem(${saleId}, '${safeName}')">Return 1</button></div>`;
-            });
-            document.getElementById('refund-modal').style.display = 'flex';
-        }
-
-        function closeRefundModal(e) { if (e.target.id === 'refund-modal') document.getElementById('refund-modal').style.display = 'none'; }
-        function returnItem(saleId, itemName) { 
-             const saleIndex = salesHistory.findIndex(s => s.id === saleId);
-             if (saleIndex === -1) return;
-             const sale = salesHistory[saleIndex];
-
-             // Return Stock
-             let product = products.find(p => p.name === itemName);
-             let itemPrice = 0;
-             if (product) { product.stock++; itemPrice = product.price; }
-
-             // Logic
-             let parts = sale.items.split(", ");
-             let newParts = [];
-             let itemFound = false;
-
-             parts.forEach(p => {
-                 let [qtyStr, ...rest] = p.split("x ");
-                 let restStr = rest.join("x ");
-                 let currentName = restStr.replace(/\s\([^)]+\)$/, "");
-                 let qty = parseInt(qtyStr);
-
-                 if (currentName === itemName && !itemFound) {
-                     if (qty > 1) {
-                         let newTotal = (qty - 1) * itemPrice;
-                         newParts.push(`${qty - 1}x ${currentName} (${newTotal.toLocaleString()} Ks)`);
-                     }
-                     itemFound = true;
-                 } else {
-                     newParts.push(p);
-                 }
-             });
-
-             if (newParts.length === 0) {
-                 salesHistory.splice(saleIndex, 1);
-                 document.getElementById('refund-modal').style.display = 'none';
-                 showAlert("Order fully refunded.");
-             } else {
-                 sale.items = newParts.join(", ");
-                 sale.total -= itemPrice;
-                 if(sale.total < 0) sale.total = 0;
-                 openRefundModal(saleId);
-             }
-
-             localStorage.setItem('myShopProducts', JSON.stringify(products));
-             localStorage.setItem('myShopHistory', JSON.stringify(salesHistory));
-             renderDashboard(); renderPOS(); renderInventory(); renderHistory(); autoSyncUpload();
         }
 
         renderCategories(); renderPOS(); renderInventory(); renderHistory(); autoSyncDownload(); loadSettings();
