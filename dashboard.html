@@ -16,6 +16,7 @@
   --success: #10b981;
   --warning: #f59e0b;
   --info: #3b82f6;
+  --primary: #2563eb; 
 }
 
 body {
@@ -26,7 +27,7 @@ body {
   background: linear-gradient(-45deg, #ee7752, #e73c7e, #23a6d5, #23d5ab);
   background-size: 400% 400%;
   animation: gradientBG 15s ease infinite;
-  padding-bottom: 80px;
+  padding-bottom: 80px; /* Important for Navbar Space */
 }
 
 @keyframes gradientBG {
@@ -39,7 +40,11 @@ body {
   max-width: 1000px;
   margin: 0 auto;
   padding: 20px;
+  padding-bottom: 90px; /* Extra space for scrolling above navbar */
 }
+
+/* --- ICONS --- */
+.icon { width: 24px; height: 24px; stroke-width: 2; stroke: currentColor; fill: none; stroke-linecap: round; stroke-linejoin: round; }
 
 /* --- GLASS COMPONENTS --- */
 .glass-box {
@@ -119,7 +124,7 @@ body {
 /* --- ACTION BUTTONS --- */
 .action-grid {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
+  grid-template-columns: repeat(2, 1fr); /* Only 2 actions now since others in nav */
   gap: 10px;
   margin-bottom: 25px;
 }
@@ -164,6 +169,7 @@ body {
   margin-bottom: 10px;
   box-shadow: 0 4px 6px rgba(0,0,0,0.05);
   border-left: 5px solid var(--danger);
+  position: relative;
 }
 .debt-name { font-size: 16px; font-weight: 900; color: #b91c1c; margin-bottom: 4px; display: block; }
 .debt-amount { font-size: 15px; color: var(--text-main); font-weight: 700; }
@@ -195,7 +201,6 @@ body {
   animation: popUp 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
 }
 @keyframes popUp { from { transform: scale(0.9); opacity: 0; } to { transform: scale(1); opacity: 1; } }
-.modal-title { font-size: 18px; font-weight: 800; margin-bottom: 20px; color: var(--text-main); }
 .modal-input { 
   width: 100%; padding: 14px; margin-bottom: 12px; 
   border: 2px solid #e2e8f0; border-radius: 14px; 
@@ -208,8 +213,24 @@ body {
 .btn-save { background: var(--danger); color: white; margin-bottom: 10px; }
 .btn-cancel { background: #f1f5f9; color: var(--text-muted); }
 
-.back-btn { position: fixed; bottom: 20px; right: 20px; background: white; padding: 12px 24px; border-radius: 30px; font-weight: 800; box-shadow: 0 10px 20px rgba(0,0,0,0.15); text-decoration: none; color: var(--primary); display: flex; align-items: center; gap: 8px; z-index: 100; transition: transform 0.2s; }
-.back-btn:active { transform: scale(0.95); }
+/* --- NAVBAR (Shared Style) --- */
+.navbar { 
+    background: rgba(255, 255, 255, 0.95);
+    backdrop-filter: blur(10px);
+    flex-shrink: 0; display: flex; z-index: 100; 
+    box-shadow: 0 -4px 20px rgba(0,0,0,0.05); 
+    border-top: 1px solid rgba(255,255,255,0.8);
+    padding-bottom: env(safe-area-inset-bottom); height: 65px; 
+    position: fixed; bottom: 0; left: 0; width: 100%;
+}
+.navbar button { 
+    flex: 1; padding: 5px 0; border: none; background: transparent; 
+    color: #94a3b8; font-size: 10px; font-weight: 600;
+    display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; 
+    cursor: pointer;
+}
+.navbar button.active { color: var(--primary); }
+.navbar button.active svg { stroke: var(--primary); }
 </style>
 </head>
 <body>
@@ -220,7 +241,7 @@ body {
     <div class="header">
         <div>
             <h1>Dashboard</h1>
-            <p>Welcome back! 👋</p>
+            <p>Overview</p>
         </div>
         <div class="date-glass">
             <span>📅</span>
@@ -262,12 +283,8 @@ body {
         </div>
     </div>
 
-    <!-- ACTIONS -->
+    <!-- ACTIONS (Reduced as Nav is back) -->
     <div class="action-grid">
-        <div class="act-btn" onclick="window.location.href='index.html'">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 3h18v18H3zM12 8v8M8 12h8"/></svg>
-            <span>POS</span>
-        </div>
         <div class="act-btn" onclick="document.getElementById('expense-modal').style.display='flex'">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="color:#ef4444;"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
             <span>Add Expense</span>
@@ -276,6 +293,7 @@ body {
              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
             <span>Backup</span>
         </div>
+        <!-- Note: Restore is less frequent, maybe move to Settings or keep here -->
          <div class="act-btn" onclick="restoreData()">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
             <span>Restore</span>
@@ -298,11 +316,6 @@ body {
     <div class="section-title">Recent Expenses</div>
     <div class="glass-box" style="padding:0 20px;" id="expense-list"></div>
 
-    <a href="index.html" class="back-btn">
-        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 12H5M12 19l-7-7 7-7"/></svg>
-        Back to POS
-    </a>
-
 </div>
 
 <!-- EXPENSE MODAL -->
@@ -314,6 +327,15 @@ body {
         <button class="modal-btn btn-save" onclick="saveExpense()">Confirm</button>
         <button class="modal-btn btn-cancel" onclick="document.getElementById('expense-modal').style.display='none'">Cancel</button>
     </div>
+</div>
+
+<!-- BOTTOM NAVBAR (Identical to POS for seamless feel) -->
+<div class="navbar">
+    <button class="active"><svg class="icon" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="9"/><rect x="14" y="3" width="7" height="5"/><rect x="14" y="12" width="7" height="9"/><rect x="3" y="16" width="7" height="5"/></svg><span>Dash</span></button>
+    <button onclick="window.location.href='index.html#sell'"><svg class="icon" viewBox="0 0 24 24"><path d="M6 2L3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"/><line x1="3" y1="6" x2="21" y2="6"/><path d="M16 10a4 4 0 0 1-8 0"/></svg><span>Sell</span></button>
+    <button onclick="window.location.href='index.html#inventory'"><svg class="icon" viewBox="0 0 24 24"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/></svg><span>Items</span></button>
+    <button onclick="window.location.href='index.html#history'"><svg class="icon" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg><span>History</span></button>
+    <button onclick="window.location.href='index.html#settings'"><svg class="icon" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 0 2.83l.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg><span>Settings</span></button>
 </div>
 
 <script>
