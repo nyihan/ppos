@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Myanmar POS Pro v85</title>
+    <title>Myanmar POS Pro v88</title>
     
     <link rel="manifest" href="manifest.json">
     <meta name="theme-color" content="#ffffff">
@@ -58,7 +58,7 @@
         .screen { display: none; flex-direction: column; height: 100%; position: relative; overflow: hidden; }
         .active-screen { display: flex; }
 
-        /* --- POS SCREEN --- */
+        /* --- POS HEADER --- */
         .pos-header {
             flex-shrink: 0;
             padding: 10px 15px;
@@ -489,7 +489,7 @@
     <div id="scanner-container"><div id="reader"></div><button class="close-scanner-btn" onclick="stopScanner()">Close Camera</button></div>
 
     <div class="navbar">
-        <button onclick="showScreen('dashboard')" id="btn-dash" class="active"><svg class="icon" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="9"/><rect x="14" y="3" width="7" height="5"/><rect x="14" y="12" width="7" height="9"/><rect x="3" y="16" width="7" height="5"/></svg><span>Dash</span></button>
+        <button onclick="window.location.href='dashboard.html'"><svg class="icon" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="9"/><rect x="14" y="3" width="7" height="5"/><rect x="14" y="12" width="7" height="9"/><rect x="3" y="16" width="7" height="5"/></svg><span>Dash</span></button>
         <button onclick="showScreen('pos')" id="btn-pos"><svg class="icon" viewBox="0 0 24 24"><path d="M6 2L3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"/><line x1="3" y1="6" x2="21" y2="6"/><path d="M16 10a4 4 0 0 1-8 0"/></svg><span>Sell</span></button>
         <button onclick="showScreen('inventory')" id="btn-inv"><svg class="icon" viewBox="0 0 24 24"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/></svg><span>Items</span></button>
         <button onclick="showScreen('history')" id="btn-hist"><svg class="icon" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg><span>History</span></button>
@@ -560,7 +560,9 @@
                             if (nameParts.length > 0) {
                                 let name = nameParts[0];
                                 let qty = parseInt(parts[0]);
-                                if(!isNaN(qty)) salesCount[name] = (salesCount[name] || 0) + qty;
+                                if (!isNaN(qty)) {
+                                    salesCount[name] = (salesCount[name] || 0) + qty;
+                                }
                             }
                         }
                     });
@@ -603,6 +605,38 @@
                 }
             } catch (e) { console.error(e); showAlert("AI Categorize Failed"); }
             finally { btn.innerText = originalText; }
+        }
+        
+        // --- NEW: AUTO FILL PRODUCT NAME (OPEN FOOD FACTS) ---
+        async function autoFillProductName(barcode) {
+             try {
+                // Duplicate check
+                if (products.some(p => p.code === barcode)) {
+                    showAlert("Item already exists ⚠️");
+                    return;
+                }
+
+                showToast("Searching product...");
+                const res = await fetch(`https://world.openfoodfacts.org/api/v0/product/${barcode}.json`);
+                const data = await res.json();
+
+                if (data.status === 1) {
+                    const name = data.product.product_name_en || data.product.product_name || "";
+                    if (name) {
+                        const nameInput = document.getElementById("new-name");
+                        if(nameInput) {
+                            nameInput.value = name;
+                            showToast("Product Found: " + name);
+                        }
+                    } else {
+                        showToast("Name unavailable");
+                    }
+                } else {
+                    showToast("Product not found online");
+                }
+            } catch (e) {
+                console.error(e);
+            }
         }
 
         async function generateReceiptMessage(items) {
@@ -1013,61 +1047,39 @@
             // We need a small delay to ensure modal is open before setting value
             setTimeout(() => {
                  document.getElementById('new-code').value = code;
-                 document.getElementById('new-name').focus(); // Focus name for quick entry
+                 // CALL AUTO FILL
+                 autoFillProductName(code);
             }, 100);
         }); } }
-        
-        // FIXED SYNC UPDATE
-        function updateSync(s) { 
-            const container = document.getElementById('sync-status');
-            if(container) container.className = s;
-        }
-        
+        function updateSync(s) { const c = document.getElementById('sync-status'); if(c) c.className = s; }
         async function autoSyncUpload() { if(SCRIPT_URL.includes("YOUR")) return; updateSync('syncing'); try { await fetch(SCRIPT_URL, {method:'POST', mode:'no-cors', headers:{'Content-Type':'application/json'}, body:JSON.stringify({products, history:salesHistory})}); updateSync('synced'); } catch { updateSync('error'); } }
         async function autoSyncDownload(force) { if(SCRIPT_URL.includes("YOUR")) return; if(force) updateSync('syncing'); try { let res = await fetch(SCRIPT_URL); let data = await res.json(); if(data.products) { products = data.products; localStorage.setItem('myShopProducts', JSON.stringify(products)); } if(data.history) { salesHistory = data.history; localStorage.setItem('myShopHistory', JSON.stringify(salesHistory)); } renderDashboard(); renderPOS(); renderInventory(); renderHistory(); updateSync('synced'); } catch { if(force) updateSync('error'); } }
         setInterval(autoSyncDownload, SYNC_INTERVAL);
-        
         function openScanModal() { document.getElementById('scan-choice-modal').style.display='flex'; setTimeout(()=>document.getElementById('modal-input').focus(),100); }
         function closeModal(e) { if(e.target.id.includes('modal')) e.target.style.display='none'; }
         function handleManualInput() { addToCart(document.getElementById('modal-input').value); }
-        
-        // FIXED SCANNER LOGIC
         function startScanner(t) { 
-            // Hide other modals to show camera cleanly
             document.getElementById('scan-choice-modal').style.display='none'; 
             document.getElementById('product-modal').style.display='none'; 
             document.getElementById('scanner-container').style.display='block'; 
-            
             scanner = new Html5Qrcode("reader"); 
             scanner.start({facingMode:"environment"}, {fps:10}, (d) => {
-                // SUCCESS CALLBACK
                 stopScanner().then(() => {
-                    if(t === 'new-code'){
-                        // If scanning inside New Item form, reopen modal and fill code
+                    if(t==='cart') addToCart(d);
+                    else {
                         openProductModal();
-                        setTimeout(() => document.getElementById('new-code').value = d, 100);
-                    } else {
-                        // Regular Sell Scan
-                        addToCart(d);
+                        setTimeout(()=> {
+                            const el = document.getElementById('new-code');
+                            if(el) {
+                                el.value = d;
+                                autoFillProductName(d); // Auto fill on manual scan too
+                            }
+                        }, 300);
                     }
                 });
             }); 
         }
-
-        function stopScanner() { 
-            if(scanner) {
-                return scanner.stop().then(() => {
-                    document.getElementById('scanner-container').style.display='none';
-                }).catch(err => {
-                    console.log("Stop failed: ", err);
-                    document.getElementById('scanner-container').style.display='none';
-                });
-            } else {
-                document.getElementById('scanner-container').style.display='none';
-                return Promise.resolve();
-            }
-        }
-        
+        function stopScanner() { if(scanner) return scanner.stop().then(() => document.getElementById('scanner-container').style.display='none'); document.getElementById('scanner-container').style.display='none'; return Promise.resolve(); }
         function closeReceipt() { document.getElementById('receipt-modal').style.display='none'; document.getElementById('cart-section').classList.remove('expanded'); }
         function showAlert(m) { document.getElementById('alert-message').innerText=m; document.getElementById('custom-alert').style.display='flex'; }
         function closeAlert() { document.getElementById('custom-alert').style.display='none'; }
