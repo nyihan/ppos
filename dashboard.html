@@ -1,0 +1,328 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"/>
+<title>Pro Shop Dashboard</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;800&display=swap" rel="stylesheet">
+<!-- Same Styles & Logic as before -->
+<style>
+/* ... (Same CSS) ... */
+:root { --bg: linear-gradient(135deg, #f8fafc, #eef2ff); --text-main: #1e293b; --text-muted: #64748b; --danger: #ef4444; --success: #10b981; --warning: #f59e0b; }
+body { margin: 0; min-height: 100vh; font-family: 'Inter', sans-serif; color: var(--text-main); background: linear-gradient(-45deg, #ee7752, #e73c7e, #23a6d5, #23d5ab); background-size: 400% 400%; animation: gradientBG 15s ease infinite; padding-bottom: 80px; }
+@keyframes gradientBG { 0% { background-position: 0% 50%; } 50% { background-position: 100% 50%; } 100% { background-position: 0% 50%; } }
+.container { max-width: 1000px; margin: 0 auto; padding: 20px; }
+.glass-box { background: rgba(255, 255, 255, 0.25); box-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.15); backdrop-filter: blur(12px); border-radius: 24px; border: 1px solid rgba(255, 255, 255, 0.35); padding: 20px; margin-bottom: 20px; }
+.header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 25px; }
+.header h1 { margin: 0; font-size: 28px; font-weight: 900; color: white; text-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+.header p { margin: 0; color: rgba(255,255,255,0.9); font-size: 13px; font-weight: 500; }
+.date-glass { background: rgba(255, 255, 255, 0.3); border: 1px solid rgba(255, 255, 255, 0.5); backdrop-filter: blur(10px); border-radius: 30px; padding: 8px 16px; color: white; font-weight: 700; font-size: 14px; display: flex; align-items: center; gap: 8px; }
+.date-input { background: transparent; border: none; color: white; font-weight: 700; font-size: 14px; outline: none; width: 130px; cursor: pointer; }
+.stat-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 15px; margin-bottom: 25px; }
+.stat-card { display: flex; flex-direction: column; justify-content: center; cursor: pointer; }
+.stat-card.main { grid-column: span 2; background: rgba(255,255,255,0.5); }
+.stat-icon { width: 38px; height: 38px; background: white; border-radius: 12px; display: flex; align-items: center; justify-content: center; margin-bottom: 10px; font-size: 18px; }
+.stat-label { font-size: 12px; font-weight: 600; color: var(--text-muted); text-transform: uppercase; }
+.stat-value { font-size: 20px; font-weight: 800; margin-top: 4px; color: var(--text-main); }
+.action-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-bottom: 25px; }
+.act-btn { background: rgba(255,255,255,0.3); border: 1px solid rgba(255,255,255,0.4); backdrop-filter: blur(5px); border-radius: 16px; padding: 15px 5px; display: flex; flex-direction: column; align-items: center; gap: 8px; cursor: pointer; color: #1e293b; font-weight: 700; font-size: 11px; }
+.debt-card { background: white; padding: 15px; border-radius: 16px; margin-bottom: 10px; box-shadow: 0 4px 6px rgba(0,0,0,0.05); border-left: 5px solid var(--danger); }
+.debt-name { font-size: 16px; font-weight: 900; color: #b91c1c; display: block; }
+.debt-amount { font-size: 15px; font-weight: 700; }
+.debt-date { font-size: 11px; color: #94a3b8; float: right; }
+.modal-overlay { display: none; position: fixed; inset: 0; background: rgba(30, 41, 59, 0.4); backdrop-filter: blur(5px); z-index: 2000; justify-content: center; align-items: center; }
+.modal-box { background: white; padding: 25px; border-radius: 24px; width: 90%; max-width: 320px; text-align: center; box-shadow: 0 20px 50px rgba(0,0,0,0.2); animation: popUp 0.3s; }
+@keyframes popUp { from { transform: scale(0.9); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+.modal-input { width: 100%; padding: 14px; margin-bottom: 12px; border: 2px solid #e2e8f0; border-radius: 14px; font-size: 15px; outline: none; box-sizing: border-box; }
+.modal-btn { width: 100%; padding: 14px; border-radius: 14px; font-weight: 700; font-size: 15px; border: none; cursor: pointer; }
+.btn-save { background: var(--danger); color: white; margin-bottom: 10px; }
+.btn-cancel { background: #f1f5f9; color: var(--text-muted); }
+.back-btn { position: fixed; bottom: 20px; right: 20px; background: white; padding: 10px 20px; border-radius: 30px; font-weight: bold; box-shadow: 0 10px 20px rgba(0,0,0,0.1); text-decoration: none; color: var(--text-main); }
+.list-item { display: flex; justify-content: space-between; align-items: center; padding: 12px 0; border-bottom: 1px solid rgba(0,0,0,0.05); }
+.item-icon { width: 40px; height: 40px; border-radius: 12px; background: rgba(255,255,255,0.5); display: flex; align-items: center; justify-content: center; margin-right: 12px; font-size: 20px; }
+.item-price { font-weight: 800; font-size: 14px; text-align: right; }
+.alert-item { display: flex; justify-content: space-between; align-items: center; background: rgba(255,255,255,0.6); padding: 12px 15px; border-radius: 12px; margin-bottom: 8px; border-left: 4px solid var(--warning); }
+.alert-item.critical { border-left-color: var(--danger); background: rgba(254, 226, 226, 0.6); }
+</style>
+</head>
+<body>
+
+<div class="container">
+    <div class="header">
+        <div><h1>Dashboard</h1><p>Overview</p></div>
+        <div class="date-glass"><span>📅</span><input type="date" class="date-input" id="date-picker"></div>
+    </div>
+
+    <div class="stat-grid">
+        <div class="glass-box stat-card main">
+            <div class="stat-label">Total Sales</div>
+            <div class="stat-value" id="stat-sales">0 Ks</div>
+        </div>
+        <div class="glass-box stat-card">
+            <div class="stat-label">Expense</div>
+            <div class="stat-value" id="stat-expense" style="color:#ef4444">0 Ks</div>
+        </div>
+        <div class="glass-box stat-card">
+            <div class="stat-label">Net Profit</div>
+            <div class="stat-value" id="stat-profit" style="color:#10b981">0 Ks</div>
+        </div>
+        <!-- Debt Card Clickable -->
+        <div class="glass-box stat-card" onclick="renderDebts()">
+            <div class="stat-label">Total Debt</div>
+            <div class="stat-value" id="stat-debt" style="color:#ef4444">0 Ks</div>
+        </div>
+    </div>
+
+    <div class="action-grid">
+        <div class="act-btn" onclick="document.getElementById('expense-modal').style.display='flex'">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="color:#ef4444;"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
+            <span>Add Expense</span>
+        </div>
+        <div class="act-btn" onclick="backupData()">
+             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+            <span>Backup</span>
+        </div>
+         <div class="act-btn" onclick="restoreData()">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+            <span>Restore</span>
+        </div>
+    </div>
+    
+    <input type="file" id="restore-file" style="display:none" onchange="processRestore(this)">
+
+    <div id="debt-section" style="display:none; margin-bottom: 20px;">
+        <h3 style="color:white; margin-bottom:15px;">Outstanding Debts</h3>
+        <div id="debt-list"></div>
+    </div>
+    
+    <div class="section-title">⚠️ Low Stock Alert</div>
+    <div class="glass-box" style="padding:10px" id="low-stock-list"></div>
+
+    <div class="section-title">Top Selling (Today)</div>
+    <div class="glass-box" style="padding:0 20px;" id="top-selling-list"></div>
+
+    <div class="section-title">Recent Expenses</div>
+    <div class="glass-box" style="padding:0 20px;" id="expense-list"></div>
+
+    <a href="index.html" class="back-btn">Back to POS</a>
+</div>
+
+<!-- EXPENSE MODAL -->
+<div id="expense-modal" class="modal-overlay">
+    <div class="modal-box">
+        <h3>Add Expense</h3>
+        <input type="text" id="exp-title" class="modal-input" placeholder="Title">
+        <input type="number" id="exp-amount" class="modal-input" placeholder="Amount">
+        <button class="modal-btn btn-save" onclick="saveExpense()">Confirm</button>
+        <button class="modal-btn btn-cancel" onclick="document.getElementById('expense-modal').style.display='none'">Cancel</button>
+    </div>
+</div>
+
+<script>
+    // LOAD DATA
+    const sales = JSON.parse(localStorage.getItem('myShopHistory')) || [];
+    const products = JSON.parse(localStorage.getItem('myShopProducts')) || [];
+    const expenses = JSON.parse(localStorage.getItem('myShopExpenses')) || [];
+
+    // DATE FILTER
+    const dateInput = document.getElementById('date-picker');
+    // Set today YYYY-MM-DD
+    const now = new Date();
+    const yyyy = now.getFullYear();
+    const mm = String(now.getMonth()+1).padStart(2,'0');
+    const dd = String(now.getDate()).padStart(2,'0');
+    dateInput.value = `${yyyy}-${mm}-${dd}`;
+    
+    dateInput.addEventListener('change', calculateStats);
+
+    function calculateStats() {
+        const selectedDate = dateInput.value; // YYYY-MM-DD
+        
+        let daySales = 0;
+        let dayProfit = 0;
+        let dayExpense = 0;
+
+        // Sales & Profit
+        const dayRecords = sales.filter(s => s.date.startsWith(selectedDate));
+        dayRecords.forEach(s => {
+            if(s.status === 'Paid') {
+                daySales += s.total;
+                // Calculate Profit: We look up current cost. Not perfect but functional.
+                const items = s.items.split(', ');
+                items.forEach(i => {
+                    const parts = i.split('x ');
+                    if(parts.length>1) {
+                        const qty = parseInt(parts[0]);
+                        const name = parts[1].split(' (')[0].trim();
+                        const p = products.find(prod => prod.name === name);
+                        if(p) {
+                            const cost = p.cost || 0;
+                            dayProfit += (p.price - cost) * qty;
+                        } else {
+                             // Fallback: profit = sales if no cost data
+                             dayProfit += (s.total); // Or 0? Let's use logic: Margin unknown.
+                        }
+                    }
+                });
+            }
+        });
+
+        // Expenses
+        const dayExps = expenses.filter(e => e.date === selectedDate);
+        dayExps.forEach(e => dayExpense += e.amount);
+        
+        // Render Stats
+        document.getElementById('stat-sales').innerText = daySales.toLocaleString() + ' Ks';
+        document.getElementById('stat-expense').innerText = '- ' + dayExpense.toLocaleString() + ' Ks';
+        const net = dayProfit - dayExpense;
+        const pEl = document.getElementById('stat-profit');
+        pEl.innerText = (net>=0?'+ ':'- ') + Math.abs(net).toLocaleString() + ' Ks';
+        pEl.style.color = net>=0 ? '#10b981' : '#ef4444';
+
+        // Debt Total (All Time)
+        const allDebts = sales.filter(s => s.status === 'Unpaid');
+        let debtTotal = 0;
+        allDebts.forEach(d => debtTotal += d.debt);
+        document.getElementById('stat-debt').innerText = debtTotal.toLocaleString() + ' Ks';
+
+        renderRecentExpenses(dayExps);
+        renderTopSelling(dayRecords);
+        renderLowStock();
+    }
+
+    function saveExpense() {
+        const title = document.getElementById('exp-title').value;
+        const amount = parseInt(document.getElementById('exp-amount').value);
+        if(!title || !amount) return alert("Fill all");
+        
+        expenses.push({ id: Date.now(), title, amount, date: dateInput.value });
+        localStorage.setItem('myShopExpenses', JSON.stringify(expenses));
+        
+        document.getElementById('expense-modal').style.display='none';
+        document.getElementById('exp-title').value = '';
+        document.getElementById('exp-amount').value = '';
+        calculateStats();
+    }
+
+    function renderDebts() {
+        const list = document.getElementById('debt-list');
+        const section = document.getElementById('debt-section');
+        list.innerHTML = '';
+        section.style.display = 'block';
+
+        const debtors = sales.filter(s => s.status === 'Unpaid');
+        if(debtors.length === 0) {
+            list.innerHTML = '<div style="color:white;text-align:center;">No debts found!</div>';
+        } else {
+            debtors.forEach(d => {
+                list.innerHTML += `
+                <div class="debt-card">
+                    <span class="debt-name">${d.customer}</span>
+                    <div style="display:flex; justify-content:space-between;">
+                        <span class="debt-amount">${d.debt.toLocaleString()} Ks</span>
+                        <span class="debt-date">${d.date.split(' ')[0]}</span>
+                    </div>
+                </div>`;
+            });
+        }
+        section.scrollIntoView({behavior: 'smooth'});
+    }
+
+    function renderLowStock() {
+        const list = document.getElementById('low-stock-list');
+        const low = products.filter(p => p.stock <= 5);
+        list.innerHTML = low.length ? '' : '<div style="text-align:center;color:#64748b;padding:10px;">Stock looks good!</div>';
+        low.forEach(p => {
+             list.innerHTML += `
+             <div class="alert-item ${p.stock<=2?'critical':''}">
+                <div style="font-weight:700;color:${p.stock<=2?'#b91c1c':'#b45309'}">${p.name}</div>
+                <div style="font-weight:800;color:${p.stock<=2?'#ef4444':'#f59e0b'}">${p.stock} Left</div>
+             </div>`;
+        });
+    }
+
+    function renderRecentExpenses(listData) {
+        const list = document.getElementById('expense-list');
+        list.innerHTML = listData.length ? '' : '<div style="text-align:center;color:#64748b;padding:10px;">No expenses yet.</div>';
+        listData.forEach(e => {
+            list.innerHTML += `
+            <div class="list-item">
+                 <div style="display:flex; align-items:center;">
+                    <div class="item-icon" style="color:#ef4444; background:rgba(239,68,68,0.1);">💸</div>
+                    <div class="item-info"><h4 style="color:#1e293b;">${e.title}</h4></div>
+                </div>
+                <div class="item-price" style="color:#ef4444;">- ${e.amount.toLocaleString()} Ks</div>
+            </div>`;
+        });
+    }
+    
+    function renderTopSelling(dayData) {
+         const list = document.getElementById('top-selling-list');
+         let counts = {};
+         dayData.forEach(s => {
+             if(s.status === 'Paid') {
+                 s.items.split(', ').forEach(i => {
+                     const parts = i.split('x ');
+                     if(parts.length > 1) {
+                         const qty = parseInt(parts[0]);
+                         const name = parts[1].split(' (')[0].trim();
+                         counts[name] = (counts[name] || 0) + qty;
+                     }
+                 });
+             }
+         });
+         
+         const sorted = Object.keys(counts).map(k => ({name:k, qty:counts[k]})).sort((a,b)=>b.qty-a.qty).slice(0,5);
+         list.innerHTML = sorted.length ? '' : '<div style="text-align:center;color:#64748b;padding:10px;">No sales yet.</div>';
+         
+         sorted.forEach(item => {
+             // Find price for display
+             const p = products.find(prod => prod.name === item.name);
+             const price = p ? p.price : 0;
+             list.innerHTML += `
+             <div class="list-item">
+                <div style="display:flex; align-items:center;">
+                    <div class="item-icon">⚡</div>
+                    <div class="item-info">
+                        <h4 style="color:#1e293b;">${item.name}</h4>
+                        <small>${item.qty} Sold</small>
+                    </div>
+                </div>
+                <div class="item-price">${(price * item.qty).toLocaleString()} Ks</div>
+            </div>`;
+         });
+    }
+
+    function backupData() {
+        const data = { products, history: sales, expenses };
+        const blob = new Blob([JSON.stringify(data)], {type: "application/json"});
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `backup_${new Date().toISOString().split('T')[0]}.json`;
+        a.click();
+    }
+
+    function restoreData() { document.getElementById('restore-file').click(); }
+    
+    function processRestore(input) {
+        const file = input.files[0];
+        if(!file) return;
+        const reader = new FileReader();
+        reader.onload = e => {
+            try {
+                const d = JSON.parse(e.target.result);
+                if(d.products) localStorage.setItem('myShopProducts', JSON.stringify(d.products));
+                if(d.history) localStorage.setItem('myShopHistory', JSON.stringify(d.history));
+                if(d.expenses) localStorage.setItem('myShopExpenses', JSON.stringify(d.expenses));
+                alert("Restored!"); location.reload();
+            } catch { alert("Invalid File"); }
+        };
+        reader.readAsText(file);
+    }
+
+    // Init
+    calculateStats();
+</script>
+</body>
+</html>
