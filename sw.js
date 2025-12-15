@@ -1,4 +1,4 @@
-const CACHE_NAME = 'myanmar-pos-pro-auto';
+const CACHE_NAME = 'myanmar-pos-pro-final-v1';
 const urlsToCache = [
   './',
   './index.html',
@@ -8,19 +8,18 @@ const urlsToCache = [
   'https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;800&display=swap'
 ];
 
-// Install Event - Cache Files
+// Install
 self.addEventListener('install', event => {
-  self.skipWaiting(); // Activate worker immediately
+  self.skipWaiting();
   event.waitUntil(
-    caches.open(CACHE_NAME)
-      .then(cache => {
-        console.log('Opened cache');
-        return cache.addAll(urlsToCache);
-      })
+    caches.open(CACHE_NAME).then(cache => {
+      console.log('Opened cache');
+      return cache.addAll(urlsToCache);
+    })
   );
 });
 
-// Activate Event - Clean old caches
+// Activate & Cleanup
 self.addEventListener('activate', event => {
   event.waitUntil(
     caches.keys().then(cacheNames => {
@@ -36,17 +35,19 @@ self.addEventListener('activate', event => {
   return self.clients.claim();
 });
 
-// Fetch Event - Network First, then Cache
+// Fetch (Network First, then Cache)
 self.addEventListener('fetch', event => {
   event.respondWith(
     fetch(event.request)
       .then(response => {
-        // If network fetch is successful, update the cache
+        // Check if we received a valid response
         if (!response || response.status !== 200 || response.type !== 'basic') {
           return response;
         }
 
+        // Clone the response
         const responseToCache = response.clone();
+
         caches.open(CACHE_NAME)
           .then(cache => {
             cache.put(event.request, responseToCache);
@@ -55,7 +56,7 @@ self.addEventListener('fetch', event => {
         return response;
       })
       .catch(() => {
-        // If network fails (Offline), try to serve from cache
+        // If network request fails, try to get it from the cache.
         return caches.match(event.request);
       })
   );
