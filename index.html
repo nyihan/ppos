@@ -8,7 +8,6 @@
     <link rel="manifest" href="manifest.json">
     <meta name="theme-color" content="#ffffff">
     
-    <!-- No Tesseract needed anymore -->
     <script src="https://unpkg.com/html5-qrcode" type="text/javascript"></script>
     <script src="https://html2canvas.hertzen.com/dist/html2canvas.min.js"></script>
     <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;600;700;800&display=swap" rel="stylesheet">
@@ -693,6 +692,9 @@
             <div id="ocr-status" style="font-size:12px; color:var(--primary); font-weight:bold; margin:10px 0; min-height:20px;"></div>
             <div class="loading-bar" id="ocr-progress"><div class="loading-fill" id="ocr-fill"></div></div>
             
+            <!-- RAW TEXT AREA FOR EDITING -->
+            <textarea id="ocr-raw-text" placeholder="Raw text from OCR or Paste..." style="width:100%; height:100px; margin-bottom:10px; padding:10px; border:1px solid #e2e8f0; border-radius:12px; font-size:12px; box-sizing:border-box;" oninput="parseReceiptLines(this.value)"></textarea>
+
             <div id="ocr-draft-list" style="max-height:250px; overflow-y:auto; text-align:left;"></div>
             
             <div style="display:flex; gap:10px; margin-top:15px;">
@@ -1534,9 +1536,6 @@
                 
                 // If sales counts are different (and at least one is > 0), prioritize higher sales
                 if (saleB !== saleA) {
-                    // If one has 0 and other has > 0, the one with sales comes first.
-                    // If both have > 0, the higher one comes first.
-                    // Just simple subtraction handles both cases to push larger sales to top.
                     return saleB - saleA; 
                 }
                 
@@ -1915,6 +1914,8 @@
             document.getElementById('ocr-preview').style.display = "none";
             document.getElementById('ocr-draft-list').innerHTML = "";
             document.getElementById('ocr-status').innerText = "";
+            // Clear textarea
+            if(document.getElementById('ocr-raw-text')) document.getElementById('ocr-raw-text').value = "";
             ocrDraftItems = [];
             document.getElementById('ocr-modal').style.display = 'flex';
         }
@@ -1996,6 +1997,8 @@
             try {
                 const text = await navigator.clipboard.readText();
                 if(text) {
+                    // Update Text Area
+                    document.getElementById('ocr-raw-text').value = text;
                     parseReceiptLines(text);
                     document.getElementById('ocr-status').innerText = "Text pasted from clipboard!";
                 } else {
@@ -2018,16 +2021,54 @@
 
             lines.forEach((line) => {
                 const cleanLine = line.trim();
-                const nums = cleanLine.match(/\d+/g);
-                if(!nums || nums.length < 2) return;
+                
+                // Match numbers, allowing for commas and decimals (e.g., 1,000 or 1000.00)
+                // Regex looks for digits, optional commas, optional decimals
+                // Note: The previous simple \d+ was missing 1,000.
+                // Improved Regex:
+                const nums = cleanLine.match(/[\d,]+(\.\d+)?/g);
+                
+                if(!nums || nums.length < 1) return; // Allow 1 number now (Price only)
 
-                let name = cleanLine.replace(/\d+/g,"").trim();
-                name = name.replace(/[.|-]$/, '').trim(); 
+                // Name is usually the text part without the found numbers
+                let name = cleanLine;
+                nums.forEach(n => {
+                    name = name.replace(n, ""); 
+                });
+                
+                name = name.replace(/[.|-]/g, '').trim(); // Clean trailing/leading noise
 
-                if(name.length < 3) return;
+                if(name.length < 2) return; // Skip if name too short
 
-                const price = parseFloat(nums[nums.length-2]);
-                const qty = nums.length >= 3 ? parseFloat(nums[nums.length-3]) : 1;
+                // Parsing Logic:
+                // If 1 number: Assume Price. Qty = 1.
+                // If 2+ numbers: Last is Price. 2nd Last is Qty?
+                // Let's filter nums to remove tiny numbers that might be part of name if desired, 
+                // but simpler heuristic:
+                
+                // Clean commas from numbers
+                const cleanNums = nums.map(n => parseFloat(n.replace(/,/g, ''))).filter(n => !isNaN(n));
+                
+                if (cleanNums.length === 0) return;
+
+                let price = 0;
+                let qty = 1;
+
+                if (cleanNums.length === 1) {
+                    price = cleanNums[0];
+                } else {
+                    // Heuristic: Last is Amount/Price. Second last might be Qty.
+                    // If last is very large and second last is small, maybe: Qty x Price = Amount
+                    // Let's assume the displayed line is "Name ... Price"
+                    // If multiple numbers, take the last one as Price.
+                    price = cleanNums[cleanNums.length - 1];
+                    
+                    // If the second to last number is small (e.g. < 50) and integer, maybe it is Qty.
+                    const potentialQty = cleanNums[cleanNums.length - 2];
+                    if (potentialQty < 100 && Number.isInteger(potentialQty)) {
+                        qty = potentialQty;
+                    }
+                }
 
                 if (price > 0) {
                     addDraftItem(name, price, qty);
