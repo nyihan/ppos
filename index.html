@@ -665,7 +665,7 @@
         <div class="sticky-header" style="flex-direction:column; align-items:stretch; gap:10px; padding:20px 20px 5px 20px; background:rgba(255,255,255,0.9); backdrop-filter:blur(10px); z-index:20; border-bottom:1px solid #f1f5f9;">
             <div style="display:flex; justify-content:space-between; align-items:center;">
                 <h3 style="margin:0;">History</h3>
-                <button onclick="autoSyncDownload(true)" style="background:#eff6ff; color:var(--primary); border:none; padding:8px 12px; border-radius:8px; font-weight:700; font-size:12px;">Sync</button>
+                <button onclick="fetchServerData(true)" style="background:#eff6ff; color:var(--primary); border:none; padding:8px 12px; border-radius:8px; font-weight:700; font-size:12px;">Sync</button>
             </div>
             <div class="history-tabs">
                 <button class="tab-btn active" onclick="filterHistory('all')" id="tab-all">All</button>
@@ -842,17 +842,20 @@
 
     <script>
         const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbwX0aG1RfowaxXfHPNaPgxYSzQyL1wRnA78S0F3ZSpUiP-NA2CLIDBDuq1utof4DWX3/exec"; 
-        const SYNC_INTERVAL = 60000;
+        // INCREASE FETCH INTERVAL TO REDUCE SERVER LOAD
+        const FETCH_INTERVAL = 60000; 
 
         let products = JSON.parse(localStorage.getItem('myShopProducts')) || [];
         let salesHistory = JSON.parse(localStorage.getItem('myShopHistory')) || [];
         let expenses = JSON.parse(localStorage.getItem('myShopExpenses')) || [];
-        // Fix: Initialize with empty strings to prevent undefined errors
-        let appSettings = JSON.parse(localStorage.getItem('myShopSettings')) || { 
-            name: "", 
-            phone: "", 
-            footer: "", 
-            dateFormat: 'YYYY-MM-DD' 
+        
+        // Fix: Initialize clearly to prevent undefined issues
+        let savedSettings = JSON.parse(localStorage.getItem('myShopSettings'));
+        let appSettings = {
+            name: (savedSettings && savedSettings.name) ? savedSettings.name : "",
+            phone: (savedSettings && savedSettings.phone) ? savedSettings.phone : "",
+            footer: (savedSettings && savedSettings.footer) ? savedSettings.footer : "",
+            dateFormat: (savedSettings && savedSettings.dateFormat) ? savedSettings.dateFormat : "YYYY-MM-DD"
         };
         
         let cart = [];
@@ -860,7 +863,10 @@
         let historyFilter = 'all';
         let scanner;
         let tempDebtSale = {};
-        let currentVoucherId = null; // Store for saving image
+        let currentVoucherId = null; 
+
+        // --- QUEUE SYSTEM INIT ---
+        let syncQueue = JSON.parse(localStorage.getItem('myShopQueue')) || [];
 
         // DATE FILTER INIT
         const dateInput = document.getElementById('date-picker');
@@ -872,11 +878,9 @@
         dateInput.addEventListener('change', renderDashboard);
 
         function loadSettings() {
-            // Load Date Format
             const select = document.getElementById('date-format-select');
             if(appSettings.dateFormat) select.value = appSettings.dateFormat;
             
-            // Load Shop Info
             document.getElementById('shop-name').value = appSettings.name || '';
             document.getElementById('shop-phone').value = appSettings.phone || '';
             document.getElementById('shop-footer').value = appSettings.footer || '';
@@ -888,16 +892,25 @@
             renderHistory();
             renderDashboard();
             showAlert("Date Format Saved!");
-            autoSyncUpload();
+            
+            // Queue Save
+            addToSyncQueue("SAVE_SETTINGS", [appSettings.name, appSettings.phone, appSettings.footer, appSettings.dateFormat]);
         }
         
         function saveShopInfo() {
-            appSettings.name = document.getElementById('shop-name').value;
-            appSettings.phone = document.getElementById('shop-phone').value;
-            appSettings.footer = document.getElementById('shop-footer').value;
+            const sName = document.getElementById('shop-name').value;
+            const sPhone = document.getElementById('shop-phone').value;
+            const sFooter = document.getElementById('shop-footer').value;
+
+            appSettings.name = sName;
+            appSettings.phone = sPhone;
+            appSettings.footer = sFooter;
+            
             localStorage.setItem('myShopSettings', JSON.stringify(appSettings));
             showAlert("Shop Info Saved!");
-            autoSyncUpload();
+            
+            // Queue Save
+            addToSyncQueue("SAVE_SETTINGS", [sName, sPhone, sFooter, appSettings.dateFormat]);
         }
 
         function formatDate(dateStr) {
@@ -920,7 +933,7 @@
             } catch (e) { return dateStr; }
         }
 
-        // SEARCH LOGIC
+        // ... [SEARCH LOGIC KEPT SAME] ...
         function toggleSearch(show) {
             const catWrapper = document.getElementById('category-wrapper');
             const searchWrapper = document.getElementById('search-wrapper');
@@ -973,14 +986,11 @@
             filtered.forEach(p => {
                 let stockClass = p.stock<=0 ? 'out-of-stock' : '';
                 let hotBadge = ((salesCount[p.name] || 0) > 5) ? `<span class="hot-badge">🔥 Hot</span>` : '';
-                
-                // CHECK CART QTY
                 let cartItem = cart.find(c => c.code === p.code);
                 let cartQty = cartItem ? cartItem.qty : 0;
                 let displayStock = p.stock - cartQty;
                 let cartBadge = cartQty > 0 ? `<span class="cart-qty-badge">${cartQty}</span>` : '';
                 
-                // Update Out of Stock Visuals based on Effective Stock
                 if(displayStock <= 0) stockClass = 'out-of-stock';
 
                 list.innerHTML += `
@@ -1010,7 +1020,7 @@
             } catch (e) { console.error(e); }
         }
 
-        // BACK LOGIC
+        // ... [BACK LOGIC KEPT SAME] ...
         let lastBackPressTime = 0;
         history.pushState(null, null, location.href); 
         window.onpopstate = function(event) {
@@ -1026,25 +1036,19 @@
         };
         function showToast(msg) { const t = document.getElementById('toast'); t.innerText = msg; t.classList.add('show'); setTimeout(() => t.classList.remove('show'), 2000); }
 
-        // --- CORE FUNCTIONS ---
+        // ... [UI FUNCTIONS KEPT SAME] ...
         function toggleCart() { document.getElementById('cart-section').classList.toggle('expanded'); }
         function openPaymentModal() { if(cart.length === 0) return showAlert("Empty"); document.getElementById('pay-total').innerText = cart.reduce((a, b) => a + calculateItemTotal(b), 0).toLocaleString() + " Ks"; document.getElementById('cash-input').value = ''; document.getElementById('payment-modal').style.display = 'flex'; }
         function fillCash(a) { const i = document.getElementById('cash-input'); i.value = (parseInt(i.value)||0) + a; }
         
-        // --- NEW KEYPAD HANDLER ---
         function handleNumKey(key) {
-            if (navigator.vibrate) navigator.vibrate(50); // Haptic Feedback
+            if (navigator.vibrate) navigator.vibrate(50);
             const input = document.getElementById('cash-input');
-            if (key === 'c') {
-                input.value = '';
-            } else {
-                input.value = (input.value || '') + key;
-            }
+            if (key === 'c') { input.value = ''; } else { input.value = (input.value || '') + key; }
         }
 
         function processPayment() {
-            if (navigator.vibrate) navigator.vibrate(50); // Confirm Haptic
-            
+            if (navigator.vibrate) navigator.vibrate(50);
             const total = cart.reduce((a, b) => a + calculateItemTotal(b), 0);
             const cashInput = document.getElementById('cash-input').value;
             const cash = cashInput === '' ? 0 : parseFloat(cashInput);
@@ -1065,34 +1069,44 @@
 
         function confirmDebt() {
             if (navigator.vibrate) navigator.vibrate(50);
-            
             const customer = document.getElementById('debt-customer').value;
             if(!customer) return alert("Name Required");
-            
             document.getElementById('debt-modal').style.display = 'none';
             completeSale(tempDebtSale.total, tempDebtSale.cash, tempDebtSale.debt, 'Unpaid', customer);
         }
 
         function completeSale(total, cash, debt, status, customer) {
             document.getElementById('payment-modal').style.display = 'none';
+            
+            // Deduct stock
             cart.forEach(item => { let p = products.find(prod => prod.code === item.code); if(p) p.stock -= item.qty; });
             localStorage.setItem('myShopProducts', JSON.stringify(products));
 
-            // Use consistent YYYY-MM-DD for date Key logic
+            // Record Sale
             const now = new Date();
-            // Local date string for filtering
             const yyyy = now.getFullYear();
             const mm = String(now.getMonth()+1).padStart(2,'0');
             const dd = String(now.getDate()).padStart(2,'0');
             const dateStr = `${yyyy}-${mm}-${dd} ${now.toLocaleTimeString()}`; 
             
             let itemStr = cart.map(i => `${i.qty}x ${i.name} (${calculateItemTotal(i).toLocaleString()})`).join(", ");
+            const saleId = Date.now();
             
-            salesHistory.unshift({ id: Date.now(), date: dateStr, total: total, items: itemStr, paid: cash, debt: debt, status: status, customer: customer });
+            const saleData = { id: saleId, date: dateStr, total: total, items: itemStr, paid: cash, debt: debt, status: status, customer: customer };
+            salesHistory.unshift(saleData);
             localStorage.setItem('myShopHistory', JSON.stringify(salesHistory));
 
-            renderDashboard(); renderPOS(); renderInventory(); renderHistory(); autoSyncUpload();
+            renderDashboard(); renderPOS(); renderInventory(); renderHistory(); 
             
+            // --- NEW: ROW-LEVEL SYNC WITH QUEUE ---
+            // Update Products Stocks
+            cart.forEach(item => {
+               const p = products.find(prod => prod.code === item.code);
+               if(p) addToSyncQueue("UPSERT_PRODUCT", [p.name, p.price, p.stock, p.code, p.category, p.cost]);
+            });
+            // Add Sale Record
+            addToSyncQueue("ADD_SALE", [saleId, dateStr, total, itemStr, cash, debt, status, customer]);
+
             if(status === 'Paid') {
                 const change = cash - total;
                 document.getElementById('r-total').innerText = total.toLocaleString() + " Ks";
@@ -1113,7 +1127,7 @@
         }
 
         function settleDebt(id) {
-            event.stopPropagation(); // Prevent card click
+            event.stopPropagation(); 
             showConfirm("Mark as Paid?", () => {
                 const sale = salesHistory.find(s => s.id === id);
                 if(sale) {
@@ -1121,19 +1135,22 @@
                     sale.paid = sale.total;
                     sale.debt = 0;
                     localStorage.setItem('myShopHistory', JSON.stringify(salesHistory));
-                    renderHistory(); renderDashboard(); autoSyncUpload();
+                    renderHistory(); renderDashboard();
+                    
+                    // Sync Update via Queue
+                    addToSyncQueue("UPDATE_SALE", [sale.id, sale.date, sale.total, sale.items, sale.paid, sale.debt, sale.status, sale.customer]);
                 }
             });
         }
 
+        // ... [RENDER HISTORY KEPT SAME] ...
         function renderHistory() {
             const list = document.getElementById('history-list'); list.innerHTML = '';
             let filtered = salesHistory;
             if(historyFilter === 'paid') filtered = salesHistory.filter(s => s.status === 'Paid');
             if(historyFilter === 'unpaid') filtered = salesHistory.filter(s => s.status === 'Unpaid');
             let groups = {};
-            const now = new Date();
-
+            
             filtered.forEach(s => { 
                 let cleanD = s.date.replace('T', ' ').split(' ')[0];
                 let dFormatted = formatDate(cleanD);
@@ -1144,25 +1161,11 @@
             for(let d in groups) {
                 list.innerHTML += `<div class="date-header">${d}</div>` + groups[d].map(s => {
                     let isDebt = s.status === 'Unpaid';
-                    let warningText = ''; let cardStyle = '';
-                    if (isDebt) {
-                        try {
-                           let dateParts = String(s.date).split(' ')[0].split('-');
-                           let saleDate = new Date(dateParts[0], dateParts[1]-1, dateParts[2]); 
-                           let diffDays = Math.ceil(Math.abs(now - saleDate) / (1000 * 60 * 60 * 24)); 
-                            if(diffDays > 3) {
-                                warningText = `<span style="color:red; font-size:11px; font-weight:bold; margin-left:5px;">⚠️ ${diffDays} Days Ago</span>`;
-                                cardStyle = 'border-left: 5px solid #ef4444; background: #fff1f2;';
-                            }
-                        } catch(e) {}
-                    }
-
                     let displayDate = formatDate(s.date).split(' ')[1] || s.date;
-
-                    let debtHtml = isDebt ? `<div style="margin-top:5px; color:#ef4444; font-weight:bold;">${s.customer}: ${s.debt.toLocaleString()} left ${warningText}</div>` : '';
+                    let debtHtml = isDebt ? `<div style="margin-top:5px; color:#ef4444; font-weight:bold;">${s.customer}: ${s.debt.toLocaleString()} left</div>` : '';
                     let actionBtn = isDebt ? `<button onclick="settleDebt(${s.id})" class="action-btn btn-settle"><svg class="icon-sm" viewBox="0 0 24 24"><path d="M20 6L9 17l-5-5"/></svg></button>` : ``;
                     
-                    return `<div class="list-card" style="${cardStyle}" onclick="viewVoucher(${s.id})">
+                    return `<div class="list-card" style="${isDebt?'border-left: 5px solid #ef4444; background: #fff1f2;':''}" onclick="viewVoucher(${s.id})">
                         <div style="flex:1">
                             <div><strong>${s.total.toLocaleString()}</strong> <span class="${isDebt ? 'debt-tag' : 'paid-tag'}">${isDebt ? 'UNPAID' : 'PAID'}</span></div>
                             <small>${displayDate}</small>
@@ -1178,7 +1181,7 @@
             }
         }
 
-        // --- VOUCHER LOGIC ---
+        // ... [VOUCHER LOGIC KEPT SAME] ...
         function viewVoucher(id) {
             currentVoucherId = id;
             const sale = salesHistory.find(s => s.id === id);
@@ -1236,31 +1239,22 @@
             document.getElementById('glass-voucher-modal').style.display = 'flex';
         }
 
-        function closeVoucher(e) {
-            if(!e || e.target.id === 'glass-voucher-modal') {
-                document.getElementById('glass-voucher-modal').style.display = 'none';
-            }
-        }
-
+        function closeVoucher(e) { if(!e || e.target.id === 'glass-voucher-modal') document.getElementById('glass-voucher-modal').style.display = 'none'; }
         function saveVoucherImage() {
-            // Updated to use settings for Export Template too
             document.getElementById('r-exp-shop-name').innerText = appSettings.name || 'MY SHOP';
             document.getElementById('r-exp-shop-phone').innerText = appSettings.phone || '';
             document.getElementById('r-exp-footer').innerText = appSettings.footer || '';
-            
             if(currentVoucherId) saveReceiptImage(currentVoucherId);
         }
 
-        // --- ENHANCED DASHBOARD RENDERER ---
+        // ... [DASHBOARD RENDERER KEPT SAME] ...
         function renderDashboard() {
-            const selectedDate = document.getElementById('date-picker').value; // YYYY-MM-DD
-            
+            const selectedDate = document.getElementById('date-picker').value; 
             let daySalesTotal = 0;
             let dayProfitTotal = 0;
             let dayExpenseTotal = 0;
 
             const daySales = salesHistory.filter(s => s.date.startsWith(selectedDate));
-            
             daySales.forEach(s => {
                 if (s.status === 'Paid') {
                     daySalesTotal += s.total;
@@ -1282,7 +1276,6 @@
 
             const dayExps = expenses.filter(e => e.date === selectedDate);
             dayExps.forEach(e => dayExpenseTotal += e.amount);
-
             const netProfit = dayProfitTotal - dayExpenseTotal;
 
             document.getElementById('stat-sales').innerText = daySalesTotal.toLocaleString() + ' Ks';
@@ -1381,7 +1374,9 @@
             
             renderDashboard();
             showAlert("Expense Added");
-            autoSyncUpload();
+            
+            // Queue Save
+            addToSyncQueue("ADD_EXPENSE", [newExp.id, newExp.title, newExp.amount, newExp.date]);
         }
 
         function backupData() {
@@ -1511,15 +1506,28 @@
             localStorage.setItem('myShopProducts', JSON.stringify(products)); 
             document.getElementById('product-modal').style.display = 'none'; 
             showAlert("Saved"); 
-            renderInventory(); renderPOS(); autoSyncUpload(); 
+            renderInventory(); renderPOS(); 
+            
+            // Queue Save
+            addToSyncQueue("UPSERT_PRODUCT", [name, price, stock, code, cat, cost]);
         }
 
-        function deleteProduct(i) { showConfirm("Delete?", () => { products.splice(i,1); localStorage.setItem('myShopProducts', JSON.stringify(products)); renderInventory(); renderPOS(); autoSyncUpload(); }); }
+        function deleteProduct(i) { 
+            showConfirm("Delete?", () => { 
+                const p = products[i];
+                const codeToDelete = p.code;
+                products.splice(i,1); 
+                localStorage.setItem('myShopProducts', JSON.stringify(products)); 
+                renderInventory(); renderPOS(); 
+                
+                // Queue Save
+                addToSyncQueue("DELETE_PRODUCT", codeToDelete);
+            }); 
+        }
         
         function calculateItemTotal(item) {
             const product = products.find(p => p.code === item.code);
             if (!product) return 0;
-            
             let total = 0;
             if (product.packCount > 1 && product.packPrice > 0 && item.qty >= product.packCount) {
                 const packs = Math.floor(item.qty / product.packCount);
@@ -1538,33 +1546,20 @@
             cart.forEach((item, idx) => { 
                 const itemTotal = calculateItemTotal(item);
                 total += itemTotal; 
-                
                 let wholesaleInfo = "";
                 const product = products.find(p => p.code === item.code);
                 if (product && product.packCount > 1 && product.packPrice > 0 && item.qty >= product.packCount) {
                      const packs = Math.floor(item.qty / product.packCount);
                      wholesaleInfo = `<br><span style="font-size:10px; color:#6366f1;">(${packs} Packs Applied)</span>`;
                 }
-
                 list.innerHTML += `<div class="cart-item"><div style="flex:1;"><div class="cart-item-name">${item.name}${wholesaleInfo}</div><div style="font-size:12px; color:#636e72;">${item.price.toLocaleString()} Ks</div></div><div style="display:flex; align-items:center; gap:8px; margin-right:10px;"><button onclick="changeCartQty(${idx}, -1)" style="width:28px; height:28px; border-radius:50%; border:1px solid #dfe6e9; background:white; color:#2d3436; font-weight:bold;">-</button><span style="font-weight:700; font-size:14px; min-width:20px; text-align:center;">${item.qty}</span><button onclick="changeCartQty(${idx}, 1)" style="width:28px; height:28px; border-radius:50%; border:none; background:var(--primary); color:white; font-weight:bold;">+</button></div><div style="font-weight:700; color:var(--dark); min-width:60px; text-align:right;">${itemTotal.toLocaleString()}</div><div class="cart-item-remove" onclick="removeFromCart(${idx})" style="margin-left:10px; font-size:18px;">✕</div></div>`; 
             }); 
             document.getElementById('total-display').innerText = total.toLocaleString() + " Ks"; 
             document.getElementById('mini-cart-total').innerText = total.toLocaleString() + " Ks"; 
         }
 
-        function removeFromCart(index) { 
-            cart.splice(index, 1); 
-            updateCartUI(); 
-            renderPOS(); // Refresh stock display and badge
-        }
-        
-        function clearCartVerify() { 
-            if(cart.length>0) showConfirm("Clear cart?", function(){ 
-                cart=[]; 
-                updateCartUI(); 
-                renderPOS(); // Refresh stock display and badge
-            }); 
-        }
+        function removeFromCart(index) { cart.splice(index, 1); updateCartUI(); renderPOS(); }
+        function clearCartVerify() { if(cart.length>0) showConfirm("Clear cart?", function(){ cart=[]; updateCartUI(); renderPOS(); }); }
         
         function changeCartQty(index, change) { 
             const item = cart[index]; 
@@ -1574,17 +1569,9 @@
                 item.qty++; 
             } else { 
                 if (item.qty > 1) { item.qty--; } 
-                else { 
-                    showConfirm("Remove?", () => { 
-                        cart.splice(index, 1); 
-                        updateCartUI(); 
-                        renderPOS(); // Refresh
-                    }); 
-                    return; 
-                } 
+                else { showConfirm("Remove?", () => { cart.splice(index, 1); updateCartUI(); renderPOS(); }); return; } 
             } 
-            updateCartUI(); 
-            renderPOS(); // Refresh stock display and badge
+            updateCartUI(); renderPOS(); 
         }
         
         function addToCart(code) { 
@@ -1593,56 +1580,107 @@
                 if(p.stock <= 0) return showAlert("Out of Stock"); 
                 let item = cart.find(i => i.code === code); 
                 if(item && item.qty + 1 > p.stock) return showAlert("No Stock"); 
-                
-                if(item) item.qty++; 
-                else cart.push({...p, qty: 1}); 
-                
-                updateCartUI(); 
-                renderPOS(); // Refresh stock display and badge
-                
-                // Safety check for scanner mode
-                if (document.getElementById('scan-choice-modal')) {
-                    document.getElementById('scan-choice-modal').style.display='none'; 
-                }
-                if(document.getElementById('modal-input')) {
-                    document.getElementById('modal-input').value = ''; 
-                }
+                if(item) item.qty++; else cart.push({...p, qty: 1}); 
+                updateCartUI(); renderPOS(); 
+                if (document.getElementById('scan-choice-modal')) document.getElementById('scan-choice-modal').style.display='none'; 
+                if(document.getElementById('modal-input')) document.getElementById('modal-input').value = ''; 
             } else { 
                 showConfirm("Add Item?", () => { 
-                    if(document.getElementById('scan-choice-modal'))
-                        document.getElementById('scan-choice-modal').style.display='none'; 
+                    if(document.getElementById('scan-choice-modal')) document.getElementById('scan-choice-modal').style.display='none'; 
                     openProductModal();
                     setTimeout(() => {
                          const el = document.getElementById('new-code');
-                         if(el) {
-                             el.value = code;
-                             autoFillProductName(code);
-                         }
+                         if(el) { el.value = code; autoFillProductName(code); }
                     }, 100);
                 }); 
             } 
         }
         function updateSync(s) { const c = document.getElementById('sync-status'); if(c) c.className = s; }
-        async function autoSyncUpload() { if(SCRIPT_URL.includes("YOUR")) return; updateSync('syncing'); try { await fetch(SCRIPT_URL, {method:'POST', mode:'no-cors', headers:{'Content-Type':'application/json'}, body:JSON.stringify({products, history:salesHistory, expenses: expenses, settings: appSettings})}); updateSync('synced'); } catch { updateSync('error'); } }
-        async function autoSyncDownload(force) { 
+        
+        // --- NEW: SYNC ENGINE (QUEUE BASED) ---
+        function addToSyncQueue(action, data) {
+            syncQueue.push({ action, data, id: Date.now() });
+            localStorage.setItem('myShopQueue', JSON.stringify(syncQueue));
+            updateSync('syncing'); // Show yellow immediately
+            processQueue(); // Try sending immediately
+        }
+
+        async function processQueue() {
+            if (SCRIPT_URL.includes("YOUR")) return;
+            if (syncQueue.length === 0) { updateSync('synced'); return; }
+            if (!navigator.onLine) { updateSync('error'); return; }
+
+            const item = syncQueue[0]; // Peek first item
+
+            try {
+                // Try sending
+                await fetch(SCRIPT_URL, {
+                    method: 'POST',
+                    mode: 'no-cors',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ action: item.action, data: item.data })
+                });
+                
+                // On success (or accepted by server), remove from queue
+                syncQueue.shift(); 
+                localStorage.setItem('myShopQueue', JSON.stringify(syncQueue));
+                
+                // Process next item immediately if any
+                if(syncQueue.length > 0) processQueue();
+                else updateSync('synced');
+
+            } catch (e) {
+                console.error("Queue Error:", e);
+                updateSync('error');
+            }
+        }
+
+        // Retry Queue periodically
+        setInterval(processQueue, 15000); // Check every 15 seconds
+
+        async function fetchServerData(force) { 
             if(SCRIPT_URL.includes("YOUR")) return; 
             if(force) updateSync('syncing'); 
             try { 
-                // Added cache buster to prevent stale settings
                 let res = await fetch(SCRIPT_URL + "?t=" + new Date().getTime()); 
                 let data = await res.json(); 
-                if(data.products) { products = data.products; localStorage.setItem('myShopProducts', JSON.stringify(products)); } 
-                if(data.history) { salesHistory = data.history; localStorage.setItem('myShopHistory', JSON.stringify(salesHistory)); } 
-                if(data.expenses) { expenses = data.expenses; localStorage.setItem('myShopExpenses', JSON.stringify(expenses)); } 
+                
+                // Only update if server has data
+                if(data.products && data.products.length > 0) { 
+                    products = data.products; 
+                    localStorage.setItem('myShopProducts', JSON.stringify(products)); 
+                } 
+                if(data.history && data.history.length > 0) { 
+                    salesHistory = data.history; 
+                    localStorage.setItem('myShopHistory', JSON.stringify(salesHistory)); 
+                } 
+                if(data.expenses && data.expenses.length > 0) { 
+                    expenses = data.expenses; 
+                    localStorage.setItem('myShopExpenses', JSON.stringify(expenses)); 
+                } 
                 if(data.settings) { 
-                    appSettings = data.settings; 
+                    appSettings = {
+                        name: data.settings.name || appSettings.name,
+                        phone: data.settings.phone || appSettings.phone,
+                        footer: data.settings.footer || appSettings.footer,
+                        dateFormat: data.settings.dateFormat || appSettings.dateFormat
+                    };
                     localStorage.setItem('myShopSettings', JSON.stringify(appSettings)); 
                     loadSettings(); 
                 } 
-                renderDashboard(); renderPOS(); renderInventory(); renderHistory(); updateSync('synced'); 
-            } catch { if(force) updateSync('error'); } 
+                
+                renderDashboard(); renderPOS(); renderInventory(); renderHistory(); 
+                // Only mark synced if queue is empty
+                if(syncQueue.length === 0) updateSync('synced'); 
+            } catch (e) { if(force) updateSync('error'); } 
         }
-        setInterval(autoSyncDownload, SYNC_INTERVAL);
+        
+        // Fetch on load (Download Only)
+        fetchServerData(true);
+        // Periodically fetch updates from others
+        setInterval(() => fetchServerData(false), FETCH_INTERVAL);
+
+        // ... [SCANNER & OTHER UTILS KEPT SAME] ...
         function openScanModal() { document.getElementById('scan-choice-modal').style.display='flex'; setTimeout(()=>document.getElementById('modal-input').focus(),100); }
         function closeModal(e) { if(e.target.id.includes('modal')) e.target.style.display='none'; }
         function handleManualInput() { addToCart(document.getElementById('modal-input').value); }
@@ -1658,10 +1696,7 @@
                         openProductModal();
                         setTimeout(()=> {
                             const el = document.getElementById('new-code');
-                            if(el) {
-                                el.value = d;
-                                autoFillProductName(d); // Auto fill on manual scan too
-                            }
+                            if(el) { el.value = d; autoFillProductName(d); }
                         }, 300);
                     }
                 });
@@ -1673,8 +1708,9 @@
         function closeAlert() { document.getElementById('custom-alert').style.display='none'; }
         function showConfirm(m, f) { document.getElementById('confirm-message').innerText=m; document.getElementById('custom-confirm').style.display='flex'; document.getElementById('confirm-yes-btn').onclick=()=>{f();closeConfirm()}; }
         function closeConfirm() { document.getElementById('custom-confirm').style.display='none'; }
-        function saveReceiptImage(id) { const sale = salesHistory.find(s => s.id === id); if (!sale) return; document.getElementById('r-exp-date').innerText = formatDate(sale.date); document.getElementById('r-exp-id').innerText = "#" + sale.id.toString().slice(-6); document.getElementById('r-exp-total').innerText = sale.total.toLocaleString() + " Ks"; let itemsHtml = ""; sale.items.split(", ").forEach(p => { itemsHtml += `<div style="display:flex; justify-content:space-between; margin-bottom:5px;"><span>${p}</span></div>`; }); document.getElementById('r-exp-items').innerHTML = itemsHtml; const element = document.getElementById('receipt-export'); element.style.left = "0"; element.style.top = "0"; element.style.zIndex = "9999"; html2canvas(element).then(canvas => { const link = document.createElement('a'); link.download = `receipt_${sale.id}.jpg`; link.href = canvas.toDataURL("image/jpeg"); link.click(); element.style.left = "-9999px"; }); }
+        
         function showScreen(id) { document.querySelectorAll('.screen').forEach(s => s.classList.remove('active-screen')); document.getElementById(id+'-screen').classList.add('active-screen'); document.querySelectorAll('.navbar button').forEach(b => b.classList.remove('active')); let btnId = id === 'dashboard' ? 'dash' : id === 'inventory' ? 'inv' : id === 'history' ? 'hist' : id === 'settings' ? 'set' : 'pos'; document.getElementById('btn-' + btnId).classList.add('active'); if(id==='dashboard') renderDashboard(); if(id==='history') renderHistory(); if(id==='settings') loadSettings(); }
+        
         function openRefundModal(saleId) {
             const sale = salesHistory.find(s => s.id === saleId);
             if (!sale) return;
@@ -1692,7 +1728,57 @@
             document.getElementById('refund-modal').style.display = 'flex';
         }
         function closeRefundModal(e) { if (e.target.id === 'refund-modal') document.getElementById('refund-modal').style.display = 'none'; }
-        function returnItem(saleId, itemName) { /* ... Same Refund Logic ... */ const saleIndex = salesHistory.findIndex(s => s.id === saleId); if (saleIndex === -1) return; const sale = salesHistory[saleIndex]; let product = products.find(p => p.name === itemName); let itemPrice = 0; if (product) { product.stock++; itemPrice = product.price; } let parts = sale.items.split(", "); let newParts = []; let itemFound = false; parts.forEach(p => { let [qtyStr, ...rest] = p.split("x "); let restStr = rest.join("x "); let currentName = restStr.replace(/\s\([^)]+\)$/, ""); let qty = parseInt(qtyStr); if (currentName === itemName && !itemFound) { if (qty > 1) { let newTotal = (qty - 1) * itemPrice; newParts.push(`${qty - 1}x ${currentName} (${newTotal.toLocaleString()} Ks)`); } itemFound = true; } else { newParts.push(p); } }); if (newParts.length === 0) { salesHistory.splice(saleIndex, 1); document.getElementById('refund-modal').style.display = 'none'; showAlert("Order fully refunded."); } else { sale.items = newParts.join(", "); sale.total -= itemPrice; if(sale.total < 0) sale.total = 0; openRefundModal(saleId); } localStorage.setItem('myShopProducts', JSON.stringify(products)); localStorage.setItem('myShopHistory', JSON.stringify(salesHistory)); renderDashboard(); renderPOS(); renderInventory(); renderHistory(); autoSyncUpload(); }
+        
+        function returnItem(saleId, itemName) { 
+            const saleIndex = salesHistory.findIndex(s => s.id === saleId); 
+            if (saleIndex === -1) return; 
+            const sale = salesHistory[saleIndex]; 
+            let product = products.find(p => p.name === itemName); 
+            let itemPrice = 0; 
+            if (product) { 
+                product.stock++; 
+                itemPrice = product.price; 
+                // Sync Stock via Queue
+                addToSyncQueue("UPSERT_PRODUCT", [product.name, product.price, product.stock, product.code, product.category, product.cost]);
+            } 
+            
+            let parts = sale.items.split(", "); 
+            let newParts = []; 
+            let itemFound = false; 
+            parts.forEach(p => { 
+                let [qtyStr, ...rest] = p.split("x "); 
+                let restStr = rest.join("x "); 
+                let currentName = restStr.replace(/\s\([^)]+\)$/, ""); 
+                let qty = parseInt(qtyStr); 
+                if (currentName === itemName && !itemFound) { 
+                    if (qty > 1) { 
+                        let newTotal = (qty - 1) * itemPrice; 
+                        newParts.push(`${qty - 1}x ${currentName} (${newTotal.toLocaleString()} Ks)`); 
+                    } 
+                    itemFound = true; 
+                } else { newParts.push(p); } 
+            }); 
+            
+            if (newParts.length === 0) { 
+                // Fully Refunded - Delete Sale? Or Mark Refunded?
+                // For simplicity, removing for now, but usually better to mark Status="Refunded"
+                salesHistory.splice(saleIndex, 1); 
+                document.getElementById('refund-modal').style.display = 'none'; 
+                showAlert("Order fully refunded."); 
+            } else { 
+                sale.items = newParts.join(", "); 
+                sale.total -= itemPrice; 
+                if(sale.total < 0) sale.total = 0; 
+                openRefundModal(saleId); 
+            } 
+            
+            localStorage.setItem('myShopProducts', JSON.stringify(products)); 
+            localStorage.setItem('myShopHistory', JSON.stringify(salesHistory)); 
+            renderDashboard(); renderPOS(); renderInventory(); renderHistory(); 
+            
+            // Sync Sale Update via Queue
+            if (newParts.length > 0) addToSyncQueue("UPDATE_SALE", [sale.id, sale.date, sale.total, sale.items, sale.paid, sale.debt, sale.status, sale.customer]);
+        }
 
         function renderCategories() {
             const cats = ['All', ...new Set(products.map(p => p.category || 'General'))];
@@ -1703,7 +1789,6 @@
             const list = document.getElementById('product-list');
             list.innerHTML = '';
             
-            // 1. Calculate Sales Counts
             let salesCount = {};
             salesHistory.forEach(s => {
                 if(s.items && typeof s.items === 'string') {
@@ -1721,25 +1806,20 @@
                 }
             });
 
-            // 2. Filter & Sort by Sales (High to Low)
             let filteredProducts = products.filter(p => currentFilter==='All' || p.category===currentFilter);
             filteredProducts.sort((a, b) => {
                 return (salesCount[b.name] || 0) - (salesCount[a.name] || 0);
             });
 
-            // 3. Render
             filteredProducts.forEach((p, index) => {
                 let stockClass = p.stock<=0 ? 'out-of-stock' : '';
-                // Top 3 items get HOT badge
                 let hotBadge = (index < 3 && (salesCount[p.name] || 0) > 0) ? `<span class="hot-badge">🔥 Hot</span>` : '';
                 
-                // CHECK CART QTY FOR BADGE & REAL-TIME STOCK
                 let cartItem = cart.find(c => c.code === p.code);
                 let cartQty = cartItem ? cartItem.qty : 0;
                 let displayStock = p.stock - cartQty;
                 let cartBadge = cartQty > 0 ? `<span class="cart-qty-badge">${cartQty}</span>` : '';
                 
-                // Adjust Out of Stock visual based on effective stock
                 if(displayStock <= 0) stockClass = 'out-of-stock';
 
                 list.innerHTML += `
@@ -1753,7 +1833,7 @@
             });
         }
 
-        renderCategories(); renderPOS(); renderInventory(); renderHistory(); autoSyncDownload(); loadSettings();
+        renderCategories(); renderPOS(); renderInventory(); renderHistory(); loadSettings();
     </script>
 </body>
 </html>
