@@ -3,11 +3,12 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Myanmar POS Pro v88</title>
+    <title>Ko Nyi Shop POS v1.1</title>
     
     <link rel="manifest" href="manifest.json">
     <meta name="theme-color" content="#ffffff">
     
+    <!-- No Tesseract needed anymore -->
     <script src="https://unpkg.com/html5-qrcode" type="text/javascript"></script>
     <script src="https://html2canvas.hertzen.com/dist/html2canvas.min.js"></script>
     <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;600;700;800&display=swap" rel="stylesheet">
@@ -252,7 +253,10 @@
             background: white; padding: 15px; margin-bottom: 10px; border-radius: 16px; 
             box-shadow: 0 2px 5px rgba(0,0,0,0.02); border: 1px solid #f1f5f9;
             display: flex; justify-content: space-between; align-items: center; 
+            user-select: none; /* Prevent text selection on long press */
+            transition: transform 0.1s;
         }
+        .list-card:active { transform: scale(0.98); }
         
         /* --- HISTORY --- */
         .history-list { 
@@ -461,6 +465,9 @@
         .loading-fill { height: 100%; background: var(--primary); width: 0%; transition: width 0.3s; }
 
         input, select { width: 100%; padding: 14px; margin-bottom: 12px; box-sizing: border-box; border: 2px solid #e2e8f0; border-radius: 12px; font-size: 15px; background: white; appearance: none; outline: none; }
+        
+        /* Fix for Numpad appearing behind Product Modal */
+        #numpad-modal { z-index: 4500; } 
     </style>
 </head>
 <body>
@@ -576,6 +583,32 @@
             <div style="display:flex; gap:10px;">
                 <button onclick="document.getElementById('payment-modal').style.display='none'" class="alert-btn btn-secondary">Cancel</button>
                 <button onclick="processPayment()" class="alert-btn" style="background:var(--primary); box-shadow: 0 10px 20px rgba(37, 99, 235, 0.3);">CONFIRM PAY</button>
+            </div>
+        </div>
+    </div>
+    
+    <!-- GENERIC NUMPAD MODAL (NEW) -->
+    <div id="numpad-modal" class="modal-overlay">
+        <div class="modal-box">
+            <h3 style="margin-top:0;">Enter Value</h3>
+            <input type="text" id="numpad-display" class="pay-input" readonly>
+            <div class="glass-numpad">
+                <div class="numpad-btn" onclick="onNumpadClick('1')">1</div>
+                <div class="numpad-btn" onclick="onNumpadClick('2')">2</div>
+                <div class="numpad-btn" onclick="onNumpadClick('3')">3</div>
+                <div class="numpad-btn" onclick="onNumpadClick('4')">4</div>
+                <div class="numpad-btn" onclick="onNumpadClick('5')">5</div>
+                <div class="numpad-btn" onclick="onNumpadClick('6')">6</div>
+                <div class="numpad-btn" onclick="onNumpadClick('7')">7</div>
+                <div class="numpad-btn" onclick="onNumpadClick('8')">8</div>
+                <div class="numpad-btn" onclick="onNumpadClick('9')">9</div>
+                <div class="numpad-btn" onclick="onNumpadClick('00')">00</div>
+                <div class="numpad-btn" onclick="onNumpadClick('0')">0</div>
+                <div class="numpad-btn clr" onclick="onNumpadClick('c')">C</div>
+            </div>
+            <div style="display:flex; gap:10px; margin-top:10px;">
+                <button onclick="closeNumpad()" class="alert-btn btn-secondary">Cancel</button>
+                <button onclick="confirmNumpad()" class="alert-btn" style="background:var(--primary);">OK</button>
             </div>
         </div>
     </div>
@@ -715,20 +748,23 @@
             <h3 style="margin-top:0;">Manage Item</h3>
             <input type="hidden" id="edit-index" value="-1">
             <select id="new-category" style="width:100%;"><option>General</option><option>Drinks</option><option>Food</option><option>Snacks</option></select>
-            <input type="text" id="new-name" placeholder="Item Name">
+            <!-- Auto Capitalize -->
+            <input type="text" id="new-name" placeholder="Item Name" oninput="autoCap(this)">
+            
             <div style="display:flex; gap:10px;">
-                <input type="number" id="new-price" placeholder="Price" style="flex:2" oninput="autoCalcCost()">
-                <input type="number" id="new-stock" placeholder="Stock" style="flex:1">
+                <!-- Readonly inputs to trigger Numpad -->
+                <input type="text" id="new-price" placeholder="Price" style="flex:2" readonly onclick="openNumpad('new-price')">
+                <input type="text" id="new-stock" placeholder="Stock" style="flex:1" readonly onclick="openNumpad('new-stock')">
             </div>
             <div style="display:flex; gap:10px; margin-top:10px;">
-                 <input type="number" id="new-discount" placeholder="Disc %" style="flex:1" oninput="autoCalcCost()">
-                 <input type="number" id="new-cost" placeholder="Buying Price (Cost)" style="flex:2">
+                 <input type="text" id="new-discount" placeholder="Disc %" style="flex:1" readonly onclick="openNumpad('new-discount')">
+                 <input type="text" id="new-cost" placeholder="Buying Price (Cost)" style="flex:2" readonly onclick="openNumpad('new-cost')">
             </div>
             
             <!-- NEW WHOLESALE FIELDS -->
             <div style="display:flex; gap:10px; margin-top:10px;">
-                <input type="number" id="new-pack-count" placeholder="Pack Qty (e.g. 12)" style="flex:1">
-                <input type="number" id="new-pack-price" placeholder="Pack Price" style="flex:1">
+                <input type="text" id="new-pack-count" placeholder="Pack Qty (e.g. 12)" style="flex:1" readonly onclick="openNumpad('new-pack-count')">
+                <input type="text" id="new-pack-price" placeholder="Pack Price" style="flex:1" readonly onclick="openNumpad('new-pack-price')">
             </div>
 
             <div style="display:flex; gap:10px; margin-top:10px;">
@@ -946,6 +982,9 @@
         let scanner;
         let tempDebtSale = {};
         let currentVoucherId = null; 
+        
+        // New Numpad Variable
+        let activeNumpadField = null;
 
         // --- QUEUE SYSTEM INIT ---
         let syncQueue = JSON.parse(localStorage.getItem('myShopQueue')) || [];
@@ -1036,6 +1075,58 @@
             group.classList.toggle('open');
             btn.classList.toggle('active');
         }
+        
+        // --- LONG PRESS LOGIC ---
+        let longPressTimer;
+        function startLongPress(i) {
+            longPressTimer = setTimeout(() => {
+                if (navigator.vibrate) navigator.vibrate(50);
+                openProductModal(i);
+            }, 800); 
+        }
+        function cancelLongPress() {
+            clearTimeout(longPressTimer);
+        }
+
+        // --- AUTO CAPITALIZE ---
+        function autoCap(input) {
+            const val = input.value;
+            input.value = val.replace(/(?:^|\s)\S/g, function(a) { return a.toUpperCase(); });
+        }
+        
+        // --- GENERIC NUMPAD ---
+        function openNumpad(targetId) {
+            activeNumpadField = targetId;
+            const currentVal = document.getElementById(targetId).value;
+            document.getElementById('numpad-display').value = currentVal;
+            document.getElementById('numpad-modal').style.display = 'flex';
+        }
+
+        function closeNumpad() {
+            document.getElementById('numpad-modal').style.display = 'none';
+            activeNumpadField = null;
+        }
+
+        function onNumpadClick(key) {
+            if (navigator.vibrate) navigator.vibrate(50);
+            const display = document.getElementById('numpad-display');
+            if (key === 'c') {
+                display.value = '';
+            } else {
+                display.value = (display.value || '') + key;
+            }
+        }
+
+        function confirmNumpad() {
+            if (activeNumpadField) {
+                const val = document.getElementById('numpad-display').value;
+                document.getElementById(activeNumpadField).value = val;
+                if(activeNumpadField === 'new-price' || activeNumpadField === 'new-discount') {
+                    autoCalcCost();
+                }
+            }
+            closeNumpad();
+        }
 
         // ... [SEARCH LOGIC KEPT SAME] ...
         function toggleSearch(show) {
@@ -1109,20 +1200,60 @@
             } catch (e) { console.error(e); }
         }
 
-        // ... [BACK LOGIC KEPT SAME] ...
+        // --- BACK LOGIC FIXED ---
         let lastBackPressTime = 0;
         history.pushState(null, null, location.href); 
+        
         window.onpopstate = function(event) {
-            const now = new Date().getTime();
-            const openModal = document.querySelector('.modal-overlay[style*="display: flex"]');
-            if (openModal) { openModal.style.display = 'none'; history.pushState(null, null, location.href); return; }
+            // Logic: If modal is open, close it. Else check exit.
+            const modals = document.querySelectorAll('.modal-overlay');
+            let modalClosed = false;
+            
+            modals.forEach(m => {
+                if(m.style.display === 'flex') {
+                    m.style.display = 'none';
+                    modalClosed = true;
+                }
+            });
+
+            // Also check cart
             const cart = document.getElementById('cart-section');
-            if (cart.classList.contains('expanded')) { cart.classList.remove('expanded'); history.pushState(null, null, location.href); return; }
-            if (document.getElementById('search-wrapper').style.display === 'flex') { toggleSearch(false); history.pushState(null, null, location.href); return; }
+            if (!modalClosed && cart && cart.classList.contains('expanded')) {
+                 cart.classList.remove('expanded');
+                 modalClosed = true;
+            }
+            
+            // Also check search
+             if (!modalClosed && document.getElementById('search-wrapper') && document.getElementById('search-wrapper').style.display === 'flex') { 
+                 toggleSearch(false); 
+                 modalClosed = true; 
+            }
+
+            if (modalClosed) {
+                // If we handled a UI close, push state again to stay on page
+                history.pushState(null, null, location.href);
+                return;
+            }
+
+            // Check Tabs - If not on POS, go to POS
             const active = document.querySelector('.screen.active-screen');
-            if (active && active.id !== 'pos-screen') { showScreen('pos'); history.pushState(null, null, location.href); return; }
-            if (now - lastBackPressTime < 2000) { } else { lastBackPressTime = now; history.pushState(null, null, location.href); showToast("Press back again to exit"); }
+            if (active && active.id !== 'pos-screen') { 
+                showScreen('pos'); 
+                history.pushState(null, null, location.href); 
+                return; 
+            }
+
+            // Double tap exit logic
+            const now = new Date().getTime();
+            if (now - lastBackPressTime < 2000) { 
+                // Allow exit (do nothing, let browser go back)
+            } else { 
+                lastBackPressTime = now; 
+                history.pushState(null, null, location.href); 
+                showToast("Press back again to exit"); 
+            }
         };
+        
         function showToast(msg) { const t = document.getElementById('toast'); t.innerText = msg; t.classList.add('show'); setTimeout(() => t.classList.remove('show'), 2000); }
 
         // ... [UI FUNCTIONS KEPT SAME] ...
@@ -1566,7 +1697,12 @@
                 const originalIndex = products.findIndex(prod => prod.code === p.code);
 
                 return `
-                <div class="list-card">
+                <div class="list-card" 
+                     onmousedown="startLongPress(${originalIndex})" 
+                     onmouseup="cancelLongPress()" 
+                     onmouseleave="cancelLongPress()" 
+                     ontouchstart="startLongPress(${originalIndex})" 
+                     ontouchend="cancelLongPress()">
                     <div>
                         <strong>${p.name}</strong><br>
                         <small>${p.category || 'General'}</small><br>
@@ -1816,18 +1952,32 @@
         function handleManualInput() { addToCart(document.getElementById('modal-input').value); }
         function startScanner(t) { 
             document.getElementById('scan-choice-modal').style.display='none'; 
-            document.getElementById('product-modal').style.display='none'; 
+            
+            // FIX: If product modal is open, use that context
+            if (t === 'new-code' || document.getElementById('product-modal').style.display === 'flex') {
+                 // Scan into existing modal field
+            } else {
+                // Else hide product modal
+                document.getElementById('product-modal').style.display='none'; 
+            }
+
             document.getElementById('scanner-container').style.display='block'; 
             scanner = new Html5Qrcode("reader"); 
             scanner.start({facingMode:"environment"}, {fps:10}, (d) => {
                 stopScanner().then(() => {
                     if(t==='cart') addToCart(d);
                     else {
-                        openProductModal();
-                        setTimeout(()=> {
-                            const el = document.getElementById('new-code');
-                            if(el) { el.value = d; autoFillProductName(d); }
-                        }, 300);
+                        // Check if Product Modal is open
+                        if (document.getElementById('product-modal').style.display === 'flex') {
+                             document.getElementById('new-code').value = d;
+                             autoFillProductName(d);
+                        } else {
+                            openProductModal();
+                            setTimeout(()=> {
+                                const el = document.getElementById('new-code');
+                                if(el) { el.value = d; autoFillProductName(d); }
+                            }, 300);
+                        }
                     }
                 });
             }); 
