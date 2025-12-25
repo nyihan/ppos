@@ -450,7 +450,6 @@
         #toast.show { visibility: visible; opacity: 1; bottom: 90px; }
 
         #receipt-export { position: absolute; left: -9999px; background: white; padding: 20px; width: 300px; font-family: monospace; }
-        
         /* 1. Z-Index fix for scanner */
         #scanner-container { display: none; position: fixed; inset: 0; background: black; z-index: 6000; }
         #reader { width: 100%; height: 100%; }
@@ -1260,7 +1259,6 @@
         history.pushState({ pos: 1 }, null, location.href);
         history.pushState({ pos: 2 }, null, location.href);
 
-        // Corrected declaration: removed duplicate
         let lastBackPressTime = 0; 
         
         window.onpopstate = function(event) {
@@ -1455,6 +1453,7 @@
                     let isDebt = s.status === 'Unpaid';
                     let displayDate = formatDate(s.date).split(' ')[1] || s.date;
                     let debtHtml = isDebt ? `<div style="margin-top:5px; color:#ef4444; font-weight:bold;">${s.customer}: ${s.debt.toLocaleString()} left</div>` : '';
+                    // Fixed onclick to pass event
                     let actionBtn = isDebt ? `<button onclick="settleDebt(${s.id}, event)" class="action-btn btn-settle"><svg class="icon-sm" viewBox="0 0 24 24"><path d="M20 6L9 17l-5-5"/></svg></button>` : ``;
                     
                     return `<div class="list-card" style="${isDebt?'border-left: 5px solid #ef4444; background: #fff1f2;':''}" onclick="viewVoucher(${s.id})">
