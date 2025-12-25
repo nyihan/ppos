@@ -450,6 +450,7 @@
         #toast.show { visibility: visible; opacity: 1; bottom: 90px; }
 
         #receipt-export { position: absolute; left: -9999px; background: white; padding: 20px; width: 300px; font-family: monospace; }
+        
         /* 1. Z-Index fix for scanner */
         #scanner-container { display: none; position: fixed; inset: 0; background: black; z-index: 6000; }
         #reader { width: 100%; height: 100%; }
@@ -1259,7 +1260,7 @@
         history.pushState({ pos: 1 }, null, location.href);
         history.pushState({ pos: 2 }, null, location.href);
 
-        let lastBackPressTime = 0; 
+        let lastBackPressTime = 0;
         
         window.onpopstate = function(event) {
             let handled = false;
@@ -1290,12 +1291,23 @@
             const active = document.querySelector('.screen.active-screen');
             if (!handled && active && active.id !== 'pos-screen') { 
                 showScreen('pos'); 
+                // Push history when returning to POS (as requested)
+                history.pushState({ pos: 'sell' }, null, location.href);
                 handled = true; 
             }
 
-            // If any UI was handled, block exit by pushing state again
+            // If any UI was handled, block exit by pushing state again (except for the POS return case which already pushed)
             if (handled) {
-                history.pushState({}, null, location.href);
+                // If it was NOT the POS return case, we still need to push state to trap the user
+                // Actually, the POS return case pushed state, so we are safe. 
+                // For modals etc, we need to push state.
+                // To be safe, just push state if we didn't just push it.
+                // But simplifying: just return. The user pushed back, we handled it, we stay on page.
+                // Wait, if we don't push state, we lose one history entry. Eventually we run out.
+                // So we SHOULD push state.
+                if (!(active && active.id !== 'pos-screen')) {
+                     history.pushState({}, null, location.href);
+                }
                 return;
             }
 
